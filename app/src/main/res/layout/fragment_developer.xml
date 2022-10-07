@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ui.developer.DeveloperFragment">
+
+    <Button
+        android:id="@+id/fileLoadButton"
+        android:layout_width="0dp"
+        android:layout_height="70dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="24dp"
+        android:text="@string/load_sensor_file"
+        app:icon="@drawable/ic_baseline_insert_drive_file_24"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/clearButton"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <Button
+        android:id="@+id/clearButton"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:layout_marginEnd="8dp"
+        android:text="@string/clear"
+        android:visibility="gone"
+        app:icon="@drawable/ic_baseline_clear_24"
+        app:layout_constraintBottom_toBottomOf="@+id/fileLoadButton"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/fileLoadButton" />
+
+    <TextView
+        android:id="@+id/metaHeader"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginTop="24dp"
+        android:text="@string/metadata"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/sensorFileTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/sensorFileTitle"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="@+id/metaHeader"
+        app:layout_constraintTop_toBottomOf="@+id/metaHeader" />
+
+    <TextView
+        android:id="@+id/durationText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/duration"
+        app:layout_constraintStart_toStartOf="@+id/metaHeader"
+        app:layout_constraintTop_toBottomOf="@+id/sensorFileTitle" />
+
+    <TextView
+        android:id="@+id/samplingRates"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="60dp"
+        android:text="@string/sampling_rates"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toStartOf="@+id/metaHeader"
+        app:layout_constraintTop_toBottomOf="@+id/durationText" />
+
+    <TextView
+        android:id="@+id/accSamplingRate"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/accelerometer_rate"
+        app:layout_constraintStart_toStartOf="@+id/samplingRates"
+        app:layout_constraintTop_toBottomOf="@+id/samplingRates" />
+
+    <TextView
+        android:id="@+id/barSamplingRate"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/barometer_rate"
+        app:layout_constraintStart_toStartOf="@+id/samplingRates"
+        app:layout_constraintTop_toBottomOf="@+id/accSamplingRate" />
+
+    <TextView
+        android:id="@+id/markersHeader"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/markers"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toStartOf="@+id/samplingRates"
+        app:layout_constraintTop_toBottomOf="@+id/barSamplingRate" />
+
+    <TextView
+        android:id="@+id/markersContent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintStart_toStartOf="@+id/markersHeader"
+        app:layout_constraintTop_toBottomOf="@+id/markersHeader" />
+
+    <TextView
+        android:id="@+id/samplesText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/samples"
+        app:layout_constraintStart_toStartOf="@+id/metaHeader"
+        app:layout_constraintTop_toBottomOf="@+id/durationText" />
+
+    <TextView
+        android:id="@+id/qualityText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/quality"
+        app:layout_constraintStart_toStartOf="@+id/metaHeader"
+        app:layout_constraintTop_toBottomOf="@+id/samplesText" />
+
+    <ProgressBar
+        android:id="@+id/fileLoading"
+        style="?android:attr/progressBarStyle"
+        android:layout_width="113dp"
+        android:layout_height="100dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

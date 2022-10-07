@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <PreferenceCategory android:title="Sensor sampling">
+        <ListPreference
+            android:key="acc_sampling_frequency"
+            android:title="Accelerometer sampling frequency"
+            android:entries="@array/acc_sampling_frequency_entries"
+            android:entryValues="@array/acc_sampling_frequency_values"
+            android:defaultValue="10.0"
+            app:useSimpleSummaryProvider="true"/>
+        <ListPreference
+            android:key="bar_sampling_frequency"
+            android:title="Barometer sampling frequency"
+            android:entries="@array/bar_sampling_frequency_entries"
+            android:entryValues="@array/bar_sampling_frequency_values"
+            android:defaultValue="1.0"
+            app:useSimpleSummaryProvider="true"/>
+    </PreferenceCategory>
+</PreferenceScreen>

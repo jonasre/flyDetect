@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE resources [
+    <!ENTITY appname "flyDetect">
+    <!ENTITY author "Jonas Reinholdt">
+    <!ENTITY email "jonaspr@ifi.uio.no">
+]>
+
+<resources>
+    <string name="app_name">&appname;</string>
+    <string name="title_activity_main">MainActivity</string>
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="nav_header_title">&appname; - A master thesis project by &author;</string>
+    <string name="nav_header_subtitle">&email;</string>
+    <string name="nav_header_desc">Navigation header</string>
+    <string name="action_settings">Settings</string>
+
+    <string name="menu_home">Home</string>
+    <string name="menu_developer">Developer</string>
+    <string name="menu_settings">Settings</string>
+
+    <string name="enable_app">Enable &appname;</string>
+    <string name="acceleration_display">%1$.2f m/s\u00B2</string>
+    <string name="pressure_display">%1$.2f hPa</string>
+    <string name="load_sensor_file">Load sensor file</string>
+
+    <string name="sensorFileTitle">Title: %1$s</string>
+    <string name="duration">Duration: %1$s</string>
+    <string name="samples">Samples: %1$s</string>
+    <string name="quality">Quality: %1$s</string>
+    <string name="accelerometer_rate">Accelerometer: %1$s</string>
+    <string name="barometer_rate">Barometer: %1$s</string>
+    <string name="metadata">Metadata:</string>
+    <string name="clear">Clear</string>
+    <string name="sampling_rates">Sampling rates (can be very inaccurate):</string>
+    <string name="markers">Markers:</string>
+</resources>
