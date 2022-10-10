@@ -3,16 +3,19 @@ package no.uio.ifi.jonaspr.flydetect.ui.developer
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import no.uio.ifi.jonaspr.flydetect.MainActivity
 import no.uio.ifi.jonaspr.flydetect.R
+import no.uio.ifi.jonaspr.flydetect.`interface`.Failable
 import no.uio.ifi.jonaspr.flydetect.databinding.FragmentDeveloperBinding
 
 class DeveloperFragment : Fragment() {
@@ -41,7 +44,18 @@ class DeveloperFragment : Fragment() {
                 if (result.resultCode == Activity.RESULT_OK) {
                     developerViewModel.fetchSensorFileInfo(
                         requireActivity().contentResolver,
-                        result.data?.data
+                        result.data?.data,
+                        object : Failable {
+                            override fun onFailure() {
+                                Handler(Looper.getMainLooper()).post{
+                                    Toast.makeText(
+                                        context,
+                                        "Error while reading file",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                        }
                     )
                 }
             }
@@ -60,6 +74,7 @@ class DeveloperFragment : Fragment() {
             sensorFileUri.observe(viewLifecycleOwner) {
                 (activity as MainActivity).postSensorFile(it)
             }
+
             sensorFileTitle.observe(viewLifecycleOwner) {
                 val replace = if (it != "") it else "N/A"
                 binding.sensorFileTitle.text =
@@ -90,6 +105,7 @@ class DeveloperFragment : Fragment() {
             markers.observe(viewLifecycleOwner) {
                 binding.markersContent.text = if (it != "") it else "N/A"
             }
+
             loadingFile.observe(viewLifecycleOwner) {
                 if (it) {
                     binding.fileLoadButton.isEnabled = false
@@ -106,7 +122,7 @@ class DeveloperFragment : Fragment() {
 
         binding.fileLoadButton.setOnClickListener {
             filePickerLauncher.launch(Intent().apply {
-                type = "*/*"
+                type = "text/plain"
                 action = Intent.ACTION_GET_CONTENT
             })
         }

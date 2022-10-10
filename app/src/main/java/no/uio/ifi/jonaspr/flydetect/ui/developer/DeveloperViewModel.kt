@@ -3,7 +3,6 @@ package no.uio.ifi.jonaspr.flydetect.ui.developer
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
-import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -11,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import no.uio.ifi.jonaspr.flydetect.Util
+import no.uio.ifi.jonaspr.flydetect.`interface`.Failable
 
 
 class DeveloperViewModel : ViewModel() {
@@ -49,7 +49,7 @@ class DeveloperViewModel : ViewModel() {
     }
 
     // Get information about the sensor file
-    fun fetchSensorFileInfo(resolver: ContentResolver, uri: Uri?) {
+    fun fetchSensorFileInfo(resolver: ContentResolver, uri: Uri?, fail: Failable? = null) {
         if (uri == null) {
             _sensorFileUri.postValue(null)
             resetText()
@@ -57,85 +57,90 @@ class DeveloperViewModel : ViewModel() {
         }
         CoroutineScope(Dispatchers.IO).launch {
             _loadingFile.postValue(true)
-            var lines: List<String>
-            with(resolver.openInputStream(uri)) {
-                lines = this?.bufferedReader()?.readLines()!!
-            }
-
-            if (lines.size < 10) {
-                return@launch // Something is wrong with the file
-            }
-
-            val startTime = lines[1].toLong()
-            val endTime = lines[lines.lastIndex].split(":")[0].toLong()
-            val duration = endTime - startTime
-
-            var markersLocal = ""
-
-            var i = 2
-            while (lines[++i] != "") {
-                lines[i].split(";").let {
-                    val timestamp = (it[1].toLong()-startTime)/1000
-                    markersLocal += "(${Util.formatSeconds(timestamp.toInt())}) ${it[0]}\n"
+            try {
+                var lines: List<String>
+                with(resolver.openInputStream(uri)) {
+                    lines = this?.bufferedReader()?.readLines()!!
                 }
-            }
 
-            val sensorEvents = lines.subList(i+1, lines.lastIndex).sortedBy {
-                it.split(":")[0].toLong()
-            }
+                if (lines.size < 10) {
+                    return@launch // Something is wrong with the file
+                }
 
-            val samplesCount = sensorEvents.size
-            i = -1
+                val startTime = lines[1].toLong()
+                val endTime = lines[lines.lastIndex].split(":")[0].toLong()
+                val duration = endTime - startTime
 
-            val acc = ArrayList<Long>()
-            val bar = ArrayList<Long>()
-            var hole = 0L
-            var prevAcc = 0L
-            var prevBar = 0L
-            while (++i < sensorEvents.size-1) {
-                val split = sensorEvents[i].split(":")
-                val timestamp = split[0].toLong()
-                when (split.size) {
-                    2 -> {
-                        if (bar.size < 10) bar.add(timestamp)
-                        if (prevBar != 0L && timestamp-prevBar > 1000) {
-                            hole += timestamp-prevBar
-                        }
-                        prevBar = timestamp
-                    }
-                    4 -> {
-                        if (acc.size < 10) acc.add(timestamp)
-                        if (prevAcc != 0L && timestamp-prevAcc > 1000) {
-                            hole += timestamp-prevAcc
-                        }
-                        prevAcc = timestamp
+                var markersLocal = ""
+
+                var i = 2
+                while (lines[++i] != "") {
+                    lines[i].split(";").let {
+                        val timestamp = (it[1].toLong()-startTime)/1000
+                        markersLocal += "(${Util.formatSeconds(timestamp.toInt())}) ${it[0]}\n"
                     }
                 }
 
+                val sensorEvents = lines.subList(i+1, lines.lastIndex).sortedBy {
+                    it.split(":")[0].toLong()
+                }
+
+                val samplesCount = sensorEvents.size
+                i = -1
+
+                val acc = ArrayList<Long>()
+                val bar = ArrayList<Long>()
+                var hole = 0L
+                var prevAcc = 0L
+                var prevBar = 0L
+                while (++i < sensorEvents.size-1) {
+                    val split = sensorEvents[i].split(":")
+                    val timestamp = split[0].toLong()
+                    when (split.size) {
+                        2 -> {
+                            if (bar.size < 10) bar.add(timestamp)
+                            if (prevBar != 0L && timestamp-prevBar > 1000) {
+                                hole += timestamp-prevBar
+                            }
+                            prevBar = timestamp
+                        }
+                        4 -> {
+                            if (acc.size < 10) acc.add(timestamp)
+                            if (prevAcc != 0L && timestamp-prevAcc > 1000) {
+                                hole += timestamp-prevAcc
+                            }
+                            prevAcc = timestamp
+                        }
+                    }
+
+                }
+
+                val accRate = calculateRate(acc)
+                val barRate = calculateRate(bar)
+
+                val qualityLocal: Float = (duration.toFloat()-(hole/2))/duration
+
+                //Log.d("dvm", "ar:$accRate, br:$barRate, ")
+
+                _sensorFileTitle.postValue(lines[0])
+                _duration.postValue(Util.formatSeconds((duration/1000).toInt()))
+                _samples.postValue(samplesCount)
+                _quality.postValue(qualityLocal)
+                _accelerometerRate.postValue(
+                    Util.convertHzMicroseconds(accRate*1000, true)
+                )
+                _barometerRate.postValue(
+                    Util.convertHzMicroseconds(barRate*1000, true)
+                )
+                _markers.postValue(markersLocal)
+
+                // If this point is reached, then the file is probably ok.
+                // The following line confirms to the rest of the app that the file is ready.
+                _sensorFileUri.postValue(uri)
+            } catch (e: Exception) {
+                // something went wrong while loading
+                fail?.onFailure()
             }
-
-            val accRate = calculateRate(acc)
-            val barRate = calculateRate(bar)
-
-            val qualityLocal: Float = (duration.toFloat()-(hole/2))/duration
-
-            //Log.d("dvm", "ar:$accRate, br:$barRate, ")
-
-            _sensorFileTitle.postValue(lines[0])
-            _duration.postValue(Util.formatSeconds((duration/1000).toInt()))
-            _samples.postValue(samplesCount)
-            _quality.postValue(qualityLocal)
-            _accelerometerRate.postValue(
-                Util.convertHzMicroseconds(accRate*1000, true)
-            )
-            _barometerRate.postValue(
-                Util.convertHzMicroseconds(barRate*1000, true)
-            )
-            _markers.postValue(markersLocal)
-
-            // If this point is reached, then the file is probably ok.
-            // The following line confirms to the rest of the app that the file is ready.
-            _sensorFileUri.postValue(uri)
             _loadingFile.postValue(false)
         }
     }
