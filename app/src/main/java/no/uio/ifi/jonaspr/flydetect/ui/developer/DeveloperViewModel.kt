@@ -81,7 +81,7 @@ class DeveloperViewModel : ViewModel() {
                     }
                 }
 
-                val sensorEvents = lines.subList(i+1, lines.lastIndex).sortedBy {
+                val sensorEvents = lines.subList(i+1, lines.size).sortedBy {
                     it.split(":")[0].toLong()
                 }
 
