@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import no.uio.ifi.jonaspr.flydetect.Util
 import no.uio.ifi.jonaspr.flydetect.`interface`.Failable
 
@@ -55,12 +56,15 @@ class DeveloperViewModel : ViewModel() {
             resetText()
             return
         }
-        CoroutineScope(Dispatchers.IO).launch {
+        CoroutineScope(Dispatchers.Default).launch {
+
             _loadingFile.postValue(true)
             try {
                 var lines: List<String>
-                with(resolver.openInputStream(uri)) {
-                    lines = this?.bufferedReader()?.readLines()!!
+                withContext(Dispatchers.IO) {
+                    with(resolver.openInputStream(uri)) {
+                        lines = this?.bufferedReader()?.readLines()!!
+                    }
                 }
 
                 if (lines.size < 10) {
@@ -80,9 +84,8 @@ class DeveloperViewModel : ViewModel() {
                         markersLocal += "(${Util.formatSeconds(timestamp.toInt())}) ${it[0]}\n"
                     }
                 }
-
                 val sensorEvents = lines.subList(i+1, lines.size).sortedBy {
-                    it.split(":")[0].toLong()
+                    it.substring(0, it.indexOf(":")).toLong()
                 }
 
                 val samplesCount = sensorEvents.size
@@ -94,17 +97,17 @@ class DeveloperViewModel : ViewModel() {
                 var prevAcc = 0L
                 var prevBar = 0L
                 while (++i < sensorEvents.size-1) {
-                    val split = sensorEvents[i].split(":")
-                    val timestamp = split[0].toLong()
-                    when (split.size) {
-                        2 -> {
+                    val firstColonIndex = sensorEvents[i].indexOf(":")
+                    val timestamp = sensorEvents[i].substring(0, firstColonIndex).toLong()
+                    when (sensorEvents[i].substring(firstColonIndex + 1).count { it == ':' }) {
+                        0 -> {
                             if (bar.size < 10) bar.add(timestamp)
                             if (prevBar != 0L && timestamp-prevBar > 1000) {
                                 hole += timestamp-prevBar
                             }
                             prevBar = timestamp
                         }
-                        4 -> {
+                        2 -> {
                             if (acc.size < 10) acc.add(timestamp)
                             if (prevAcc != 0L && timestamp-prevAcc > 1000) {
                                 hole += timestamp-prevAcc

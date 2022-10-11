@@ -120,7 +120,7 @@ class CustomSensorManager(
     // Run sensor data through the listener, but resamples the data using linear interpolation
     private fun resample(lines: List<String>) {
         val sensorEventStrings = lines.sortedBy {
-            it.split(":")[0].toLong()
+            it.substring(0, it.indexOf(":")).toLong()
         }
         // Hashmap for holding the next timestamp for each sensor
         val nextTimestampMap = HashMap<Int, Long>().apply {
