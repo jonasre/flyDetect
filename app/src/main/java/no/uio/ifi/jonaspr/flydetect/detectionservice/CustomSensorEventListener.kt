@@ -8,6 +8,13 @@ import android.util.Log
 class CustomSensorEventListener : SensorEventListener {
     var latestAcc = floatArrayOf(0f, 0f, 0f)
     var latestBar = 0f
+    var accCount = 0
+    var barCount = 0
+
+    fun resetCounters() {
+        accCount = 0
+        barCount = 0
+    }
 
     override fun onSensorChanged(event: SensorEvent?) {
         val v = event?.values!!
@@ -17,11 +24,13 @@ class CustomSensorEventListener : SensorEventListener {
             // Pressure data
             Sensor.TYPE_PRESSURE -> {
                 latestBar = v[0]
+                barCount++
                 //Log.d(TAG, "SensorEvent PRESSURE: $t@${v[0]}")
             }
             // Accelerometer data
             Sensor.TYPE_ACCELEROMETER -> {
                 latestAcc = v
+                accCount++
                 //Log.d(TAG, "SensorEvent ACCELEROMETER: $t@${v[0]}:${v[1]}:${v[2]}")
             }
             else -> {

@@ -36,12 +36,11 @@ class DetectionService : Service() {
         running = true
 
         val accSamplingFrequency = Util.convertHzMicroseconds(
-            intent!!.getFloatExtra("accSamplingFrequency", -1f).toInt()
+            intent!!.getFloatExtra("accSamplingFrequency", -1f)
         )
         val barSamplingFrequency = Util.convertHzMicroseconds(
-            intent.getFloatExtra("barSamplingFrequency", -1f).toInt()
+            intent.getFloatExtra("barSamplingFrequency", -1f)
         )
-
 
         // Get sensorFile for sensor injection (optional)
         // intent.getParcelableExtra(key) is deprecated since API level 33
@@ -52,6 +51,8 @@ class DetectionService : Service() {
             intent.getParcelableExtra("sensorFile")
         }
 
+        val resample = intent.getBooleanExtra("resampleSensorFile", true)
+
         sensorListener = CustomSensorEventListener()
         // Use CustomSensorManager if sensor data should be injected,
         // else use default SensorManager
@@ -60,7 +61,7 @@ class DetectionService : Service() {
             val inputStream = contentResolver.openInputStream(sensorFile)
             val l = inputStream!!.bufferedReader().readLines()
             inputStream.close()
-            CustomSensorManager(getSystemService(Context.SENSOR_SERVICE) as SensorManager, l)
+            CustomSensorManager(getSystemService(Context.SENSOR_SERVICE) as SensorManager, l, resample)
         } else {
             SensorManagerWrapper(getSystemService(Context.SENSOR_SERVICE) as SensorManager)
         }.apply {

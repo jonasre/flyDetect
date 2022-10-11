@@ -16,5 +16,11 @@
             android:entryValues="@array/bar_sampling_frequency_values"
             android:defaultValue="1.0"
             app:useSimpleSummaryProvider="true"/>
+        <SwitchPreferenceCompat
+            android:key="resampleSensorFile"
+            android:title="Resample sensor file"
+            android:summary="When replaying recorded sensor data from a file, the data will be
+                resampled to match the specified frequencies"
+            android:defaultValue="true"/>
     </PreferenceCategory>
 </PreferenceScreen>

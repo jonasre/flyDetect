@@ -102,6 +102,7 @@ class MainActivity : AppCompatActivity() {
                     if (mSensorFile.value != null) {
                         putExtra("sensorFile", mSensorFile.value)
                     }
+                    putExtra("resampleSensorFile", it.getBoolean("resampleSensorFile", true))
                 })
             }
         }
