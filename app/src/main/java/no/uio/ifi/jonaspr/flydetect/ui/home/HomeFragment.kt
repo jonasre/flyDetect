@@ -89,7 +89,12 @@ class HomeFragment : Fragment() {
                                 String.format(getString(R.string.pressure_display), it.latestBarSample())
                             binding.replayProgress.progress = serviceBinder?.replayProgress()!!
                             delay(100)
+                        } catch (e: CancellationException) {
+                            // This block is to avoid catching JobCancellationException in the next
+                            // catch block. The exception is rethrown
+                            throw e
                         } catch (e: Exception) {
+                            Log.e(TAG, "UI update loop encountered an exception", e)
                             break
                         }
                     }

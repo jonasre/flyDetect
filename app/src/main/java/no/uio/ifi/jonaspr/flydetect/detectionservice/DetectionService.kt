@@ -10,6 +10,10 @@ import android.os.Binder
 import android.os.Build.VERSION
 import android.os.IBinder
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import no.uio.ifi.jonaspr.flydetect.BuildConfig
 import no.uio.ifi.jonaspr.flydetect.MainActivity
 import no.uio.ifi.jonaspr.flydetect.R
@@ -20,12 +24,12 @@ class DetectionService : Service() {
         fun stop() = this@DetectionService.stop()
         fun latestAccSample() = sensorListener.latestAcc
         fun latestBarSample() = sensorListener.latestBar
-        fun replayProgress() = sensorManager.getReplayProgress()
+        fun replayProgress() = sensorManager?.getReplayProgress() ?: 0
     }
     private val binder = LocalBinder()
 
-    private lateinit var sensorManager: SensorManagerInterface
-    private lateinit var sensorListener: CustomSensorEventListener
+    private var sensorManager: SensorManagerInterface? = null
+    private val sensorListener = CustomSensorEventListener()
 
     override fun onBind(intent: Intent): IBinder {
         return binder
@@ -35,52 +39,55 @@ class DetectionService : Service() {
         Log.i(TAG, "Start command received")
         running = true
 
-        val accSamplingFrequency = Util.convertHzMicroseconds(
-            intent!!.getFloatExtra("accSamplingFrequency", -1f)
-        )
-        val barSamplingFrequency = Util.convertHzMicroseconds(
-            intent.getFloatExtra("barSamplingFrequency", -1f)
-        )
-
-        // Get sensorFile for sensor injection (optional)
-        // intent.getParcelableExtra(key) is deprecated since API level 33
-        val sensorFile: Uri? = if (VERSION.SDK_INT >= 33) {
-            intent.getParcelableExtra("sensorFile", Uri::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra("sensorFile")
-        }
-
-        val resample = intent.getBooleanExtra("resampleSensorFile", true)
-
-        sensorListener = CustomSensorEventListener()
-        // Use CustomSensorManager if sensor data should be injected,
-        // else use default SensorManager
-        sensorManager = if (sensorFile != null) {
-
-            val inputStream = contentResolver.openInputStream(sensorFile)
-            val l = inputStream!!.bufferedReader().readLines()
-            inputStream.close()
-            CustomSensorManager(getSystemService(Context.SENSOR_SERVICE) as SensorManager, l, resample)
-        } else {
-            SensorManagerWrapper(getSystemService(Context.SENSOR_SERVICE) as SensorManager)
-        }.apply {
-            registerListener(
-                sensorListener,
-                getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
-                accSamplingFrequency,
-                0
+        CoroutineScope(Dispatchers.Default).launch {
+            val accSamplingFrequency = Util.convertHzMicroseconds(
+                intent!!.getFloatExtra("accSamplingFrequency", -1f)
             )
-            registerListener(
-                sensorListener,
-                getDefaultSensor(Sensor.TYPE_PRESSURE),
-                barSamplingFrequency,
-                0
+            val barSamplingFrequency = Util.convertHzMicroseconds(
+                intent.getFloatExtra("barSamplingFrequency", -1f)
             )
+
+            // Get sensorFile for sensor injection (optional)
+            // intent.getParcelableExtra(key) is deprecated since API level 33
+            val sensorFile: Uri? = if (VERSION.SDK_INT >= 33) {
+                intent.getParcelableExtra("sensorFile", Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra("sensorFile")
+            }
+
+            val resample = intent.getBooleanExtra("resampleSensorFile", true)
+
+            // Use CustomSensorManager if sensor data should be injected,
+            // else use default SensorManager
+            sensorManager = if (sensorFile != null) {
+                withContext(Dispatchers.IO) {
+                    val inputStream = contentResolver.openInputStream(sensorFile)
+                    val l = inputStream!!.bufferedReader().readLines()
+                    inputStream.close()
+                    return@withContext CustomSensorManager(
+                        getSystemService(Context.SENSOR_SERVICE) as SensorManager,
+                        l,
+                        resample
+                    )
+                }
+            } else {
+                SensorManagerWrapper(getSystemService(Context.SENSOR_SERVICE) as SensorManager)
+            }.apply {
+                registerListener(
+                    sensorListener,
+                    getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
+                    accSamplingFrequency,
+                    0
+                )
+                registerListener(
+                    sensorListener,
+                    getDefaultSensor(Sensor.TYPE_PRESSURE),
+                    barSamplingFrequency,
+                    0
+                )
+            }
         }
-
-
-
 
         startForeground()
         return START_NOT_STICKY //Is there a better alternative?
@@ -118,7 +125,7 @@ class DetectionService : Service() {
     fun stop() {
         Log.i(TAG, "Stop signal received")
         //unregister listeners, stop other things
-        sensorManager.unregisterListener(sensorListener)
+        sensorManager?.unregisterListener(sensorListener)
         stopSelf()
     }
 
