@@ -5,7 +5,9 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.util.Log
 
-class CustomSensorEventListener : SensorEventListener {
+class CustomSensorEventListener(
+    private val decisionComponent: DecisionComponent
+) : SensorEventListener {
     var latestAcc = floatArrayOf(0f, 0f, 0f)
     var latestBar = 0f
     var accCount = 0
@@ -23,12 +25,14 @@ class CustomSensorEventListener : SensorEventListener {
         when (event.sensor?.type) {
             // Pressure data
             Sensor.TYPE_PRESSURE -> {
+                decisionComponent.addBarSample(event)
                 latestBar = v[0]
                 barCount++
                 //Log.d(TAG, "SensorEvent PRESSURE: $t@${v[0]}")
             }
             // Accelerometer data
             Sensor.TYPE_ACCELEROMETER -> {
+                decisionComponent.addAccSample(event)
                 latestAcc = v
                 accCount++
                 //Log.d(TAG, "SensorEvent ACCELEROMETER: $t@${v[0]}:${v[1]}:${v[2]}")

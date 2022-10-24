@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Binder
 import android.os.Build.VERSION
 import android.os.IBinder
+import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,7 +30,8 @@ class DetectionService : Service() {
     private val binder = LocalBinder()
 
     private var sensorManager: SensorManagerInterface? = null
-    private val sensorListener = CustomSensorEventListener()
+    private lateinit var sensorListener: CustomSensorEventListener
+    private lateinit var decisionComponent: DecisionComponent
 
     override fun onBind(intent: Intent): IBinder {
         return binder
@@ -39,24 +41,27 @@ class DetectionService : Service() {
         Log.i(TAG, "Start command received")
         running = true
 
+        val accSamplingFrequency =
+            intent!!.getFloatExtra("accSamplingFrequency", -1f)
+
+        val barSamplingFrequency =
+            intent.getFloatExtra("barSamplingFrequency", -1f)
+
+        // Get sensorFile for sensor injection (optional)
+        // intent.getParcelableExtra(key) is deprecated since API level 33
+        val sensorFile: Uri? = if (VERSION.SDK_INT >= 33) {
+            intent.getParcelableExtra("sensorFile", Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra("sensorFile")
+        }
+
+        val resample = intent.getBooleanExtra("resampleSensorFile", true)
+
+        decisionComponent = DecisionComponent(accSamplingFrequency, barSamplingFrequency)
+        sensorListener = CustomSensorEventListener(decisionComponent)
+
         CoroutineScope(Dispatchers.Default).launch {
-            val accSamplingFrequency = Util.convertHzMicroseconds(
-                intent!!.getFloatExtra("accSamplingFrequency", -1f)
-            )
-            val barSamplingFrequency = Util.convertHzMicroseconds(
-                intent.getFloatExtra("barSamplingFrequency", -1f)
-            )
-
-            // Get sensorFile for sensor injection (optional)
-            // intent.getParcelableExtra(key) is deprecated since API level 33
-            val sensorFile: Uri? = if (VERSION.SDK_INT >= 33) {
-                intent.getParcelableExtra("sensorFile", Uri::class.java)
-            } else {
-                @Suppress("DEPRECATION")
-                intent.getParcelableExtra("sensorFile")
-            }
-
-            val resample = intent.getBooleanExtra("resampleSensorFile", true)
 
             // Use CustomSensorManager if sensor data should be injected,
             // else use default SensorManager
@@ -65,6 +70,7 @@ class DetectionService : Service() {
                     val inputStream = contentResolver.openInputStream(sensorFile)
                     val l = inputStream!!.bufferedReader().readLines()
                     inputStream.close()
+                    decisionComponent.setStartTime(l[1].toLong()*1_000_000) // index 1 is timestamp
                     return@withContext CustomSensorManager(
                         getSystemService(Context.SENSOR_SERVICE) as SensorManager,
                         l,
@@ -72,18 +78,19 @@ class DetectionService : Service() {
                     )
                 }
             } else {
+                decisionComponent.setStartTime(SystemClock.elapsedRealtimeNanos())
                 SensorManagerWrapper(getSystemService(Context.SENSOR_SERVICE) as SensorManager)
             }.apply {
                 registerListener(
                     sensorListener,
                     getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
-                    accSamplingFrequency,
+                    Util.convertHzMicroseconds(accSamplingFrequency),
                     0
                 )
                 registerListener(
                     sensorListener,
                     getDefaultSensor(Sensor.TYPE_PRESSURE),
-                    barSamplingFrequency,
+                    Util.convertHzMicroseconds(barSamplingFrequency),
                     0
                 )
             }
