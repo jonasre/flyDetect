@@ -11,6 +11,8 @@ internal class SensorEventRingBuffer(frequency: Float) {
         topIndex = prevIndex(0)
     }
 
+    fun size() = array.size
+
     // Insert a SensorEvent object
     fun insert(event: SensorEvent) {
         if (compareEvents(event, array[topIndex]) >= 0) {
@@ -30,17 +32,18 @@ internal class SensorEventRingBuffer(frequency: Float) {
     }
 
     // Get the last n seconds of sensor events
-    fun getLatest(seconds: Int): Array<SensorEvent?> {
-        if (array[topIndex] == null) return arrayOfNulls(0)
+    @Suppress("UNCHECKED_CAST")
+    fun getLatest(seconds: Int): Array<SensorEvent> {
+        if (array[topIndex] == null) return arrayOf()
         val latestTimestamp = array[topIndex]!!.timestamp
-        val timestampCutoff = latestTimestamp - seconds * TIMESTAMP_MULTIPLIER
+        val timestampCutoff = latestTimestamp - (seconds * TIMESTAMP_MULTIPLIER)
         val cutoffIndex = binarySearch(timestampCutoff)
         return if (cutoffIndex > topIndex) {
-            val a: Array<SensorEvent?> = array.copyOfRange(cutoffIndex, array.size)
-            val b: Array<SensorEvent?> = array.copyOfRange(0, topIndex + 1)
+            val a = array.copyOfRange(cutoffIndex, array.size) as Array<SensorEvent>
+            val b = array.copyOfRange(0, topIndex + 1) as Array<SensorEvent>
             concatArrays(a, b)
         } else {
-            array.copyOfRange(cutoffIndex, topIndex + 1)
+            array.copyOfRange(cutoffIndex, topIndex + 1) as Array<SensorEvent>
         }
     }
 
@@ -153,8 +156,9 @@ internal class SensorEventRingBuffer(frequency: Float) {
         return if (e2 == null) 1 else timestamp.compareTo(e2.timestamp)
     }
 
-    private fun concatArrays(a: Array<SensorEvent?>, b: Array<SensorEvent?>): Array<SensorEvent?> {
-        val result: Array<SensorEvent?> = a.copyOf(a.size + b.size)
+    @Suppress("UNCHECKED_CAST")
+    private fun concatArrays(a: Array<SensorEvent>, b: Array<SensorEvent>): Array<SensorEvent> {
+        val result = a.copyOf(a.size + b.size) as Array<SensorEvent>
         System.arraycopy(b, 0, result, a.size, b.size)
         return result
     }
@@ -164,7 +168,7 @@ internal class SensorEventRingBuffer(frequency: Float) {
     }
 
     companion object {
-        private const val SECONDS_OF_DATA = 120
-        private const val TIMESTAMP_MULTIPLIER = 1_000_000_000
+        private const val SECONDS_OF_DATA = 240
+        private const val TIMESTAMP_MULTIPLIER = 1_000_000_000L
     }
 }
