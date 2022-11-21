@@ -140,12 +140,12 @@ internal class SensorEventRingBuffer(frequency: Float) {
 
     // Returns the next valid index after i
     private fun nextIndex(i: Int): Int {
-        return if (i + 1 >= array.size) 0 else i + 1
+        return (i + 1) % array.size
     }
 
     // Returns the previous valid index before i
     private fun prevIndex(i: Int): Int {
-        return if (i - 1 < 0) array.size - 1 else i - 1
+        return (i + array.size - 1) % array.size
     }
 
     private fun compareEvents(e1: SensorEvent, e2: SensorEvent?): Int {
