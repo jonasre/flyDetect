@@ -328,7 +328,7 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         private const val ROLL_LIFTOFF_MAX_DELAY = 26_000_000_000 //nanoseconds (ns)
         private const val MIN_EVENTS_LIFTOFF = (LIFTOFF_TIME_MIN/1_000_000_000) * 5
         private val TAKEOFF_ROLL_ACC_RANGE = 9.95..10.3 // m/s^2
-        private val LIFTOFF_ACC_RANGE = 10.8..11.4 // m/s^2
+        private val LIFTOFF_ACC_RANGE = 10.8..11.6 // m/s^2
 
         /* Pressure related constants */
         private const val STABLE_PRESSURE_THRESHOLD = 0.004f //variance
