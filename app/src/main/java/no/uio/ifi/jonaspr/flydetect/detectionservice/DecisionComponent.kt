@@ -165,7 +165,8 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
                     // If this point is reached then liftoff was detected
                     // takeoff roll + liftoff = flight
                     flying = true
-                    Log.i(TAG, "Flight detected")
+                    Log.i(TAG, "Flight detected at ${ma[i].first} (aka " +
+                            "${asSeconds(ma[i].first)} s)")
                     break
 
                 }
@@ -256,23 +257,24 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         var sum = 0f
         var top = 0
         var current = 0f
-        val highestTimestamp = source[source.lastIndex].first
         for (i in source.indices) {
             sum -= current
             current = source[i].second
             val ceil = source[i].first + windowSize
-            if (ceil > highestTimestamp) {
-                // Return when there isn't enough events to calculate the average.
-                // This is used to avoid noise at the end of the array
-                return Array(i) {
-                    Pair(source[it].first, ma[it])
-                }
-            }
             // Find top index for window
             while (top < source.size && source[top].first < ceil) {
                 // add to the sum as we go
                 sum += source[top].second
                 top++
+            }
+            if (top > source.lastIndex ||
+                (source[top].first - ceil)/windowSize.toDouble() > MAX_RELATIVE_MARGIN_CEIL
+            ) {
+                // Return when there isn't enough events to calculate the average.
+                // This is used to avoid noise at the end of the array
+                return Array(i) {
+                    Pair(source[it].first, ma[it])
+                }
             }
             ma[i] = sum / (top - i)
         }
@@ -287,23 +289,23 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         var sum = 0f
         var top = 0
         var current = 0f
-        val highestTimestamp = source[source.lastIndex].first
         for (i in source.indices) {
             sum -= current
             current = source[i].second
             val ceil = source[i].first + windowSize
-            if (ceil > highestTimestamp) {
-                // Return when there isn't enough events to calculate the average.
-                // This is used to avoid noise at the end of the array
-                return Array(i) {
-                    Pair(source[it].first, mv[it])
-                }
-            }
             // Find top index for window
             while (top < source.size && source[top].first < ceil) {
                 // add to the sum as we go
                 sum += source[top].second
                 top++
+            }
+            if (top > source.lastIndex ||
+                (source[top].first - ceil)/windowSize.toDouble() > MAX_RELATIVE_MARGIN_CEIL) {
+                // Return when there isn't enough events to calculate the average.
+                // This is used to avoid noise at the end of the array
+                return Array(i) {
+                    Pair(source[it].first, mv[it])
+                }
             }
             val mean = sum / (top - i)
             var total = 0f
@@ -319,6 +321,7 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
     companion object {
         private const val TAG = "DC"
         private const val DEFAULT_CHECK_INTERVAL = 60_000_000_000 //nanoseconds (ns)
+        private const val MAX_RELATIVE_MARGIN_CEIL = 0.1f
 
         /* Acceleration related constants */
 
