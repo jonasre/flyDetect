@@ -182,7 +182,8 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
     private fun checkBar() {
         // ...
         val window = barBuffer.getLatest(nextCheckWindow)
-        val variance = movingVariance(window, 10_000)
+        val average = movingAverage(window, 10_000)
+        val variance = movingVariance(average, 10_000)
         var timeUntilNextCheck = DEFAULT_CHECK_INTERVAL
 
         // Since barometer will be activated when takeoff is detected, pressure might already
@@ -320,17 +321,42 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         private const val DEFAULT_CHECK_INTERVAL = 60_000_000_000 //nanoseconds (ns)
 
         /* Acceleration related constants */
+
+        // Window size for moving average
         private const val MOVING_AVG_WINDOW_SIZE = 10_000 //milliseconds (ms)
-        private const val TAKEOFF_ROLL_TIME_MIN = 20_000_000_000 //nanoseconds (ns)
-        private const val LIFTOFF_TIME_MIN = 5_000_000_000 //nanoseconds (ns)
-        private const val ROLL_LIFTOFF_MAX_DELAY = 26_000_000_000 //nanoseconds (ns)
-        private const val MIN_EVENTS_LIFTOFF = (LIFTOFF_TIME_MIN/1_000_000_000) * 5
+
+        // Acceleration must be within this range to qualify as takeoff roll
         private val TAKEOFF_ROLL_ACC_RANGE = 9.95..10.3 // m/s^2
+
+        // Acceleration must be within TAKEOFF_ROLL_ACC_RANGE for this amount of time to qualify as
+        // takeoff roll
+        private const val TAKEOFF_ROLL_TIME_MIN = 20_000_000_000 //nanoseconds (ns)
+
+        // Acceleration must be within this range to qualify as liftoff
         private val LIFTOFF_ACC_RANGE = 10.8..11.6 // m/s^2
 
+        // Acceleration must be within LIFTOFF_ACC_RANGE for this amount of time to qualify as
+        // liftoff
+        private const val LIFTOFF_TIME_MIN = 5_000_000_000 //nanoseconds (ns)
+
+        // Liftoff must be detected before this time has passed since takeoff roll was detected
+        private const val ROLL_LIFTOFF_MAX_DELAY = 26_000_000_000 //nanoseconds (ns)
+
+        // Liftoff cannot be detected without at least this many sensor samples
+        private const val MIN_EVENTS_LIFTOFF = (LIFTOFF_TIME_MIN/1_000_000_000) * 5
+
+
         /* Pressure related constants */
+
+        // Variance must be below this value to qualify as stable
         private const val STABLE_PRESSURE_THRESHOLD = 0.004f //variance
+
+        // Variance must be below STABLE_PRESSURE_THRESHOLD for this amount of time to qualify as
+        // stable
         private const val STABLE_PRESSURE_MIN_TIME = 10_000_000_000 //nanoseconds (ns)
+
+        // Difference from last stable pressure value must be at least this to qualify as a new
+        // plateau
         private const val STABLE_PRESSURE_MIN_DIFF = 3f //hPa
     }
 }
