@@ -1,9 +1,7 @@
 package no.uio.ifi.jonaspr.flydetect.detectionservice
 
-import android.hardware.SensorEvent
-
-internal class SensorEventRingBuffer(frequency: Float) {
-    private val array: Array<SensorEvent?>
+internal class SensorDataRingBuffer(frequency: Float) {
+    private val array: Array<Pair<Long, Float>?>
     private var topIndex: Int
 
     init {
@@ -14,7 +12,7 @@ internal class SensorEventRingBuffer(frequency: Float) {
     fun size() = array.size
 
     // Insert a SensorEvent object
-    fun insert(event: SensorEvent) {
+    fun insert(event: Pair<Long, Float>) {
         if (compareEvents(event, array[topIndex]) >= 0) {
             // The timestamp of this event is either equal or greater to the newest
             topIndex = nextIndex(topIndex)
@@ -33,17 +31,17 @@ internal class SensorEventRingBuffer(frequency: Float) {
 
     // Get the last n seconds of sensor events
     @Suppress("UNCHECKED_CAST")
-    fun getLatest(seconds: Int): Array<SensorEvent> {
+    fun getLatest(seconds: Int): Array<Pair<Long, Float>> {
         if (array[topIndex] == null) return arrayOf()
-        val latestTimestamp = array[topIndex]!!.timestamp
+        val latestTimestamp = array[topIndex]!!.first
         val timestampCutoff = latestTimestamp - (seconds * TIMESTAMP_MULTIPLIER)
         val cutoffIndex = binarySearch(timestampCutoff)
         return if (cutoffIndex > topIndex) {
-            val a = array.copyOfRange(cutoffIndex, array.size) as Array<SensorEvent>
-            val b = array.copyOfRange(0, topIndex + 1) as Array<SensorEvent>
+            val a = array.copyOfRange(cutoffIndex, array.size) as Array<Pair<Long, Float>>
+            val b = array.copyOfRange(0, topIndex + 1) as Array<Pair<Long, Float>>
             concatArrays(a, b)
         } else {
-            array.copyOfRange(cutoffIndex, topIndex + 1) as Array<SensorEvent>
+            array.copyOfRange(cutoffIndex, topIndex + 1) as Array<Pair<Long, Float>>
         }
     }
 
@@ -78,8 +76,8 @@ internal class SensorEventRingBuffer(frequency: Float) {
     }
 
     // Returns the index where e should be inserted
-    private fun binarySearch(e: SensorEvent): Int {
-        return binarySearch(e.timestamp)
+    private fun binarySearch(e: Pair<Long, Float>): Int {
+        return binarySearch(e.first)
     }
 
     private fun binarySearch(timestamp: Long): Int {
@@ -148,17 +146,20 @@ internal class SensorEventRingBuffer(frequency: Float) {
         return (i + array.size - 1) % array.size
     }
 
-    private fun compareEvents(e1: SensorEvent, e2: SensorEvent?): Int {
-        return compareEvents(e1.timestamp, e2)
+    private fun compareEvents(e1: Pair<Long, Float>, e2: Pair<Long, Float>?): Int {
+        return compareEvents(e1.first, e2)
     }
 
-    private fun compareEvents(timestamp: Long, e2: SensorEvent?): Int {
-        return if (e2 == null) 1 else timestamp.compareTo(e2.timestamp)
+    private fun compareEvents(timestamp: Long, e2: Pair<Long, Float>?): Int {
+        return if (e2 == null) 1 else timestamp.compareTo(e2.first)
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun concatArrays(a: Array<SensorEvent>, b: Array<SensorEvent>): Array<SensorEvent> {
-        val result = a.copyOf(a.size + b.size) as Array<SensorEvent>
+    private fun concatArrays(
+        a: Array<Pair<Long, Float>>,
+        b: Array<Pair<Long, Float>>
+    ): Array<Pair<Long, Float>> {
+        val result = a.copyOf(a.size + b.size) as Array<Pair<Long, Float>>
         System.arraycopy(b, 0, result, a.size, b.size)
         return result
     }

@@ -1,18 +1,17 @@
 package no.uio.ifi.jonaspr.flydetect.detectionservice
 
-import android.hardware.Sensor
-import android.hardware.SensorEvent
 import android.util.Log
 import kotlin.math.abs
-import kotlin.math.sqrt
 
 class DecisionComponent(accFrequency: Float, barFrequency: Float) {
     private var flying: Boolean = false
     private var roll: Boolean = false
     private var rollTimestamp: Long = 0L
-    private var stablePressure: Float = 0f
-    private val accBuffer = SensorEventRingBuffer(accFrequency)
-    private val barBuffer = SensorEventRingBuffer(barFrequency)
+    private val accBuffer = SensorDataRingBuffer(accFrequency)
+    private val barBuffer = SensorDataRingBuffer(barFrequency)
+
+    // Pairs of <timestamp, pressure> where pressure is stable.
+    private val pressurePlateaus = ArrayList<Pair<Long, Float>>()
 
     private var nextAccCheckTime: Long = 0
     private var nextBarCheckTime: Long = 0
@@ -21,18 +20,20 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
 
     private var nextCheckWindow: Int = (DEFAULT_CHECK_INTERVAL/1_000_000_000).toInt()
 
+    private fun asSeconds(t: Long) = (t-startTime)/1_000_000_000
+
     // Adds an acceleration sample to its buffer
-    fun addAccSample(event: SensorEvent) {
+    fun addAccSample(event: Pair<Long, Float>) {
         accBuffer.insert(event)
-        if (event.timestamp >= nextAccCheckTime) {
+        if (event.first >= nextAccCheckTime) {
             checkAcc()
         }
     }
 
     // Adds a pressure sample to its buffer
-    fun addBarSample(event: SensorEvent) {
+    fun addBarSample(event: Pair<Long, Float>) {
         barBuffer.insert(event)
-        if (event.timestamp >= nextBarCheckTime) {
+        if (event.first >= nextBarCheckTime) {
             checkBar()
         }
     }
@@ -54,7 +55,7 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         // If nothing of interest is found, reset nextCheckWindow to its default value
         var i = 0
         if (ma.isEmpty()) {
-            timeUntilNextCheck += window[0].timestamp - nextAccCheckTime
+            timeUntilNextCheck += window[0].first - nextAccCheckTime
             Log.w(TAG, "Received empty moving average (gap in data?). Window: ${window.size}")
         }
         //if (ma.isNotEmpty())
@@ -91,7 +92,8 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
                     // Next check should be done sooner than normal
                     timeUntilNextCheck = DEFAULT_CHECK_INTERVAL / 2
                 } else {
-                    Log.i(TAG, "Takeoff roll detected at ${ma[i].first}")
+                    Log.i(TAG, "Takeoff roll detected at ${ma[i].first} " +
+                            "(aka ${asSeconds(ma[i].first)}s)")
                     roll = remainsInRange
                     rollTimestamp = ma[i].first
                 }
@@ -183,12 +185,20 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         val variance = movingVariance(window, 10_000)
         var timeUntilNextCheck = DEFAULT_CHECK_INTERVAL
 
+        // Since barometer will be activated when takeoff is detected, pressure might already
+        // be changing and therefore a "stable" pressure might not be detected. We instead save the
+        // first value received from the barometer.
+        if (pressurePlateaus.isEmpty() && window.isNotEmpty()) {
+            newPressurePlateau(window[0].first, window[0].second)
+        }
+
         var i = 0
         while (i < variance.size) {
             // Loop until end of array or until pressure has left its stable level
             while (
                 i < variance.size &&
-                abs(stablePressure - window[i].values[0]) < STABLE_PRESSURE_MIN_DIFF
+                abs(pressurePlateaus.let { it[it.lastIndex].second } - window[i].second) <
+                    STABLE_PRESSURE_MIN_DIFF
             ) i++
             if (i >= variance.size) break // Stop if end of array was reached
 
@@ -209,10 +219,8 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
             while (i < variance.size && variance[i].second < STABLE_PRESSURE_THRESHOLD) {
                 if (stableStartTime + STABLE_PRESSURE_MIN_TIME <= variance[i].first) {
                     // Stable pressure detected
-                    stablePressure = window[i].values[0]
-                    Log.i(TAG, "Stable pressure detected ($stablePressure at " +
-                            "${variance[i].first}, aka ${(variance[i].first-startTime)/1_000_000_000} s)")
-                    if (variance[i].first != window[i].timestamp)
+                    newPressurePlateau(variance[i].first, window[i].second)
+                    if (variance[i].first != window[i].first)
                         throw Exception("Timestamps in moving variance and window do not match")
                     break
                 }
@@ -222,7 +230,8 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
             if (i >= variance.size){
                 // End of array was reached while checking variance, schedule next check sooner
                 Log.d(TAG, "End of array was reached while checking variance, " +
-                        "scheduling next check sooner")
+                        "scheduling next check sooner (time is ${variance[i-1].first} aka " +
+                        "${asSeconds(variance[i-1].first)}s)")
                 timeUntilNextCheck /= 2
                 break
             }
@@ -231,39 +240,37 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         nextBarCheckTime += timeUntilNextCheck
     }
 
-    private fun movingAverage(source: Array<SensorEvent>, ms: Int): Array<Pair<Long, Float>> {
+    private fun newPressurePlateau(t: Long, v: Float) {
+        pressurePlateaus.add(Pair(t, v))
+        Log.i(TAG, "New pressure plateau registered ($v at $t, aka ${asSeconds(t)} s)")
+
+        // Analyze the data here
+    }
+
+    private fun movingAverage(source: Array<Pair<Long, Float>>, ms: Int): Array<Pair<Long, Float>> {
         if (source.isEmpty()) return arrayOf()
         val ma = FloatArray(source.size)
-        if (source[0].sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            // Calculate magnitude
-            for (i in source.indices) {
-                ma[i] = source[i].values.let { v -> sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]) }
-            }
-        } else {
-            // sensor type is pressure
-            for (i in source.indices) ma[i] = source[i].values[0]
-        }
 
         val windowSize: Long = ms*1_000_000L
         var sum = 0f
         var top = 0
         var current = 0f
-        val highestTimestamp = source[source.lastIndex].timestamp
+        val highestTimestamp = source[source.lastIndex].first
         for (i in source.indices) {
             sum -= current
-            current = ma[i]
-            val ceil = source[i].timestamp + windowSize
+            current = source[i].second
+            val ceil = source[i].first + windowSize
             if (ceil > highestTimestamp) {
                 // Return when there isn't enough events to calculate the average.
                 // This is used to avoid noise at the end of the array
                 return Array(i) {
-                    Pair(source[it].timestamp, ma[it])
+                    Pair(source[it].first, ma[it])
                 }
             }
             // Find top index for window
-            while (top < source.size && source[top].timestamp < ceil) {
+            while (top < source.size && source[top].first < ceil) {
                 // add to the sum as we go
-                sum += ma[top]
+                sum += source[top].second
                 top++
             }
             ma[i] = sum / (top - i)
@@ -271,45 +278,36 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         return arrayOf() // for the compiler
     }
 
-    private fun movingVariance(source: Array<SensorEvent>, ms: Int): Array<Pair<Long, Float>> {
+    private fun movingVariance(source: Array<Pair<Long, Float>>, ms: Int): Array<Pair<Long, Float>> {
         if (source.isEmpty()) return arrayOf()
         val mv = FloatArray(source.size)
-        if (source[0].sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            // Calculate magnitude
-            for (i in source.indices) {
-                mv[i] = source[i].values.let { v -> sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]) }
-            }
-        } else {
-            // sensor type is pressure
-            for (i in source.indices) mv[i] = source[i].values[0]
-        }
 
         val windowSize: Long = ms*1_000_000L
         var sum = 0f
         var top = 0
         var current = 0f
-        val highestTimestamp = source[source.lastIndex].timestamp
+        val highestTimestamp = source[source.lastIndex].first
         for (i in source.indices) {
             sum -= current
-            current = mv[i]
-            val ceil = source[i].timestamp + windowSize
+            current = source[i].second
+            val ceil = source[i].first + windowSize
             if (ceil > highestTimestamp) {
                 // Return when there isn't enough events to calculate the average.
                 // This is used to avoid noise at the end of the array
                 return Array(i) {
-                    Pair(source[it].timestamp, mv[it])
+                    Pair(source[it].first, mv[it])
                 }
             }
             // Find top index for window
-            while (top < source.size && source[top].timestamp < ceil) {
+            while (top < source.size && source[top].first < ceil) {
                 // add to the sum as we go
-                sum += mv[top]
+                sum += source[top].second
                 top++
             }
             val mean = sum / (top - i)
             var total = 0f
             for (j in i..top) {
-                val deviation = mean - mv[j]
+                val deviation = mean - source[j].second
                 total += deviation * deviation
             }
             mv[i] = total/(top-i)

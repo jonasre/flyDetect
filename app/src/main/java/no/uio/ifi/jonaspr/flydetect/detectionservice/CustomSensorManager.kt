@@ -101,7 +101,6 @@ class CustomSensorManager(
         if (resample) {
             resample(lines)
         } else {
-            currentIndex = i
             while (currentIndex < lines.size && !stop) {
                 val event = newSensorEvent(lines[currentIndex])
                 listener.onSensorChanged(event)
