@@ -21,6 +21,7 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
     private var nextCheckWindowAcc: Int = (DEFAULT_ACC_CHECK_INTERVAL/1_000_000_000).toInt()
     private var nextCheckWindowBar: Int = (COMPUTED_BAR_WINDOW/1_000_000_000).toInt()
 
+    fun currentlyFlying() = flying
     private fun asSeconds(t: Long) = (t-startTime)/1_000_000_000
 
     // Adds an acceleration sample to its buffer

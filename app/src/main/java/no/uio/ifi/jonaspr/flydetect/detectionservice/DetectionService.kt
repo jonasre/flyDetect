@@ -26,6 +26,7 @@ class DetectionService : Service() {
         fun latestAccSample() = sensorListener.latestAcc
         fun latestBarSample() = sensorListener.latestBar
         fun replayProgress() = sensorManager?.getReplayProgress() ?: 0
+        fun flying() = decisionComponent.currentlyFlying()
     }
     private val binder = LocalBinder()
 

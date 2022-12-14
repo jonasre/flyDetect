@@ -62,6 +62,7 @@ class HomeFragment : Fragment() {
 
     private fun stopUiUpdate() {
         job?.cancel()
+        binding.flyingStatus.text = ""
         binding.pressure.text = ""
         binding.acceleration.text = ""
     }
@@ -83,6 +84,7 @@ class HomeFragment : Fragment() {
                             val magnitude = it.latestAccSample().let { v ->
                                 sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
                             }
+                            binding.flyingStatus.text = if (it.flying()) "Flying!" else "Not flying"
                             binding.acceleration.text =
                                 String.format(getString(R.string.acceleration_display), magnitude)
                             binding.pressure.text =
