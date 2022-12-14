@@ -10,8 +10,8 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
     private val accBuffer = SensorDataRingBuffer((accFrequency * SECONDS_OF_ACC).toInt())
     private val barBuffer = SensorDataRingBuffer((barFrequency * SECONDS_OF_BAR).toInt())
 
-    // Pairs of <timestamp, pressure> where pressure is stable.
-    private val pressurePlateaus = ArrayList<Pair<Long, Float>>()
+    // Pair of <timestamp, pressure> where pressure is stable.
+    private var lastPressurePlateau: Pair<Long, Float> = Pair(0, 0f)
 
     private var nextAccCheckTime: Long = 0
     private var nextBarCheckTime: Long = 0
@@ -82,18 +82,17 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
                         break
                     }
                 }
-
                 // Acceleration was not within the range, restart loop
                 if (!remainsInRange) continue
 
                 // Did acceleration remain in range long enough that takeoff roll could've happened
                 if (i >= ma.size) {
-                    Log.d(TAG, "Some data looks like takeoff roll, awaiting more to confirm")
+                    Log.v(TAG, "Some data looks like takeoff roll, awaiting more to confirm")
                     // Could be takeoff roll, but we ran out of data.
                     // Next check should be done sooner than normal
                     timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL / 2
                 } else {
-                    Log.i(TAG, "Takeoff roll detected at ${ma[i].first} " +
+                    Log.v(TAG, "Takeoff roll detected at ${ma[i].first} " +
                             "(aka ${asSeconds(ma[i].first)}s)")
                     roll = remainsInRange
                     rollTimestamp = ma[i].first
@@ -117,15 +116,14 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
                         // In other words - no data was in liftoff range withing the time limit
                         // or there is a gap in the data
                         if (i < ma.size && ma[i].first >= latestTimeLiftoff) {
-                            Log.i(TAG, "(STAGE 1) No liftoff detected, takeoff roll was " +
+                            Log.v(TAG, "(STAGE 1) No liftoff detected, takeoff roll was " +
                                     "likely a false positive")
                             roll = false
                             break
                         }
-
                         // If there wasn't enough data to determine if liftoff happened or not
                         if (i >= ma.size) {
-                            Log.i(TAG, "(STAGE 1) Not enough data in buffer to detect" +
+                            Log.v(TAG, "(STAGE 1) Not enough data in buffer to detect" +
                                     " liftoff, next check will be scheduled sooner")
                             timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL / 2
                             break
@@ -147,60 +145,46 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
 
                     // There wasn't enough data in the buffer to determine if liftoff happened
                     if (i >= ma.size) {
-                        Log.i(TAG, "(STAGE 2) Not enough data in buffer to detect liftoff, " +
+                        Log.v(TAG, "(STAGE 2) Not enough data in buffer to detect liftoff, " +
                                 "next check will be scheduled sooner")
                         timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL / 2
                         break
                     }
-
                     // Liftoff possible, but too little data to be sure
                     if (iterations < MIN_EVENTS_LIFTOFF) {
-                        Log.i(TAG, "(STAGE 2) Liftoff might've happened but there were too " +
+                        Log.v(TAG, "(STAGE 2) Liftoff might've happened but there were too " +
                                 "many gaps in the data to be sure. Takeoff roll now " +
                                 "considered false positive")
                         roll = false
                         break
                     }
-
-
                     // If this point is reached then liftoff was detected
                     // takeoff roll + liftoff = flight
                     flying = true
+                    roll = false
                     Log.i(TAG, "Flight detected at ${ma[i].first} (aka " +
                             "${asSeconds(ma[i].first)} s)")
                     break
-
                 }
             } else {
                 break
             }
         }
-
-
-
         nextAccCheckTime += timeUntilNextCheck - (ACC_MOVING_AVG_WINDOW_SIZE * 1_000_000L)
     }
 
     private fun checkBar() {
-        // ...
         val window = barBuffer.getLatest(nextCheckWindowBar)
         val average = movingAverage(window, BAR_MOVING_AVG_WINDOW_SIZE)
         val variance = movingVariance(average, BAR_MOVING_VAR_WINDOW_SIZE)
         var timeUntilNextCheck = DEFAULT_BAR_CHECK_INTERVAL
-
-        // Since barometer will be activated when takeoff is detected, pressure might already
-        // be changing and therefore a "stable" pressure might not be detected. We instead save the
-        // first value received from the barometer.
-        if (pressurePlateaus.isEmpty() && average.isNotEmpty()) {
-            newPressurePlateau(average[0].first, average[0].second)
-        }
 
         var i = 0
         while (i < variance.size) {
             // Loop until end of array or until pressure has left its stable level
             while (
                 i < variance.size &&
-                abs(pressurePlateaus.let { it[it.lastIndex].second } - average[i].second) <
+                abs(lastPressurePlateau.second - average[i].second) <
                     STABLE_PRESSURE_MIN_DIFF
             ) i++
             if (i >= variance.size) break // Stop if end of array was reached
@@ -232,32 +216,26 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
 
             if (i >= variance.size){
                 // End of array was reached while checking variance, schedule next check sooner
-                Log.d(TAG, "End of array was reached while checking variance, " +
+                Log.v(TAG, "End of array was reached while checking variance, " +
                         "scheduling next check sooner (time is ${variance[i-1].first} aka " +
                         "${asSeconds(variance[i-1].first)}s)")
                 timeUntilNextCheck /= 2
                 break
             }
-
         }
         nextBarCheckTime += timeUntilNextCheck
     }
 
     private fun newPressurePlateau(t: Long, v: Float) {
-        pressurePlateaus.add(Pair(t, v))
-        Log.i(TAG, "New pressure plateau registered ($v at $t, aka ${asSeconds(t)} s)")
+        Log.v(TAG, "New pressure plateau registered ($v at $t, aka ${asSeconds(t)} s)")
 
-        // Analyze the data here
-        if (pressurePlateaus.size > 1) {
-            for (i in 1..pressurePlateaus.lastIndex) {
-                val diff = pressurePlateaus[i].second - pressurePlateaus[i-1].second
-                val timeDiff = pressurePlateaus[i].first - pressurePlateaus[i-1].first
-                val end = timeDiff < LANDING_PRESSURE_MAX_TIME && diff in LANDING_PRESSURE_DIFF_RANGE
-                val time = asSeconds(pressurePlateaus[i].first)
-                Log.d(TAG, "Plateau $i@${pressurePlateaus[i].second}: time: $time s, tDiff: " +
-                        "${timeDiff/1_000_000_000} s, end?: $end")
-            }
+        val diff = v - lastPressurePlateau.second
+        val timeDiff = t - lastPressurePlateau.first
+        if (timeDiff < LANDING_PRESSURE_MAX_TIME && diff in LANDING_PRESSURE_DIFF_RANGE) {
+            Log.i(TAG, "Landing detected at $t (aka ${asSeconds(t)} s)")
+            flying = false
         }
+        lastPressurePlateau = Pair(t, v)
     }
 
     private fun movingAverage(source: Array<Pair<Long, Float>>, ms: Int): Array<Pair<Long, Float>> {
