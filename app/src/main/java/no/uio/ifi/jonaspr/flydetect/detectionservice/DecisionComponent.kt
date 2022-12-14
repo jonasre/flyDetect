@@ -7,8 +7,8 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
     private var flying: Boolean = false
     private var roll: Boolean = false
     private var rollTimestamp: Long = 0L
-    private val accBuffer = SensorDataRingBuffer(accFrequency)
-    private val barBuffer = SensorDataRingBuffer(barFrequency)
+    private val accBuffer = SensorDataRingBuffer((accFrequency * SECONDS_OF_ACC).toInt())
+    private val barBuffer = SensorDataRingBuffer((barFrequency * SECONDS_OF_BAR).toInt())
 
     // Pairs of <timestamp, pressure> where pressure is stable.
     private val pressurePlateaus = ArrayList<Pair<Long, Float>>()
@@ -18,7 +18,8 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
 
     private var startTime = 0L
 
-    private var nextCheckWindow: Int = (DEFAULT_CHECK_INTERVAL/1_000_000_000).toInt()
+    private var nextCheckWindowAcc: Int = (DEFAULT_ACC_CHECK_INTERVAL/1_000_000_000).toInt()
+    private var nextCheckWindowBar: Int = (COMPUTED_BAR_WINDOW/1_000_000_000).toInt()
 
     private fun asSeconds(t: Long) = (t-startTime)/1_000_000_000
 
@@ -41,15 +42,15 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
     // Sets the timestamp for last data check for both sensor types
     // This function should only be called once to initialize before sensor data is provided
     fun setStartTime(i: Long) {
-        nextAccCheckTime = i + DEFAULT_CHECK_INTERVAL
-        nextBarCheckTime = i + DEFAULT_CHECK_INTERVAL
+        nextAccCheckTime = i + DEFAULT_ACC_CHECK_INTERVAL
+        nextBarCheckTime = i + COMPUTED_BAR_WINDOW
         startTime = i
     }
 
     private fun checkAcc() {
-        val window = accBuffer.getLatest(nextCheckWindow)
-        val ma = movingAverage(window, MOVING_AVG_WINDOW_SIZE)
-        var timeUntilNextCheck = DEFAULT_CHECK_INTERVAL
+        val window = accBuffer.getLatest(nextCheckWindowAcc)
+        val ma = movingAverage(window, ACC_MOVING_AVG_WINDOW_SIZE)
+        var timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL
         // If something of interest is found, increase nextCheckWindow
         // this may be repeated until nextCheckWindow reaches the maximum size of the buffer (ish)
         // If nothing of interest is found, reset nextCheckWindow to its default value
@@ -90,7 +91,7 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
                     Log.d(TAG, "Some data looks like takeoff roll, awaiting more to confirm")
                     // Could be takeoff roll, but we ran out of data.
                     // Next check should be done sooner than normal
-                    timeUntilNextCheck = DEFAULT_CHECK_INTERVAL / 2
+                    timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL / 2
                 } else {
                     Log.i(TAG, "Takeoff roll detected at ${ma[i].first} " +
                             "(aka ${asSeconds(ma[i].first)}s)")
@@ -126,7 +127,7 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
                         if (i >= ma.size) {
                             Log.i(TAG, "(STAGE 1) Not enough data in buffer to detect" +
                                     " liftoff, next check will be scheduled sooner")
-                            timeUntilNextCheck = DEFAULT_CHECK_INTERVAL / 2
+                            timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL / 2
                             break
                         }
                     }
@@ -148,7 +149,7 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
                     if (i >= ma.size) {
                         Log.i(TAG, "(STAGE 2) Not enough data in buffer to detect liftoff, " +
                                 "next check will be scheduled sooner")
-                        timeUntilNextCheck = DEFAULT_CHECK_INTERVAL / 2
+                        timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL / 2
                         break
                     }
 
@@ -177,21 +178,21 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
 
 
 
-        nextAccCheckTime += timeUntilNextCheck - (MOVING_AVG_WINDOW_SIZE * 1_000_000L)
+        nextAccCheckTime += timeUntilNextCheck - (ACC_MOVING_AVG_WINDOW_SIZE * 1_000_000L)
     }
 
     private fun checkBar() {
         // ...
-        val window = barBuffer.getLatest(nextCheckWindow)
-        val average = movingAverage(window, 10_000)
-        val variance = movingVariance(average, 10_000)
-        var timeUntilNextCheck = DEFAULT_CHECK_INTERVAL
+        val window = barBuffer.getLatest(nextCheckWindowBar)
+        val average = movingAverage(window, BAR_MOVING_AVG_WINDOW_SIZE)
+        val variance = movingVariance(average, BAR_MOVING_VAR_WINDOW_SIZE)
+        var timeUntilNextCheck = DEFAULT_BAR_CHECK_INTERVAL
 
         // Since barometer will be activated when takeoff is detected, pressure might already
         // be changing and therefore a "stable" pressure might not be detected. We instead save the
         // first value received from the barometer.
-        if (pressurePlateaus.isEmpty() && window.isNotEmpty()) {
-            newPressurePlateau(window[0].first, window[0].second)
+        if (pressurePlateaus.isEmpty() && average.isNotEmpty()) {
+            newPressurePlateau(average[0].first, average[0].second)
         }
 
         var i = 0
@@ -199,7 +200,7 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
             // Loop until end of array or until pressure has left its stable level
             while (
                 i < variance.size &&
-                abs(pressurePlateaus.let { it[it.lastIndex].second } - window[i].second) <
+                abs(pressurePlateaus.let { it[it.lastIndex].second } - average[i].second) <
                     STABLE_PRESSURE_MIN_DIFF
             ) i++
             if (i >= variance.size) break // Stop if end of array was reached
@@ -221,8 +222,8 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
             while (i < variance.size && variance[i].second < STABLE_PRESSURE_THRESHOLD) {
                 if (stableStartTime + STABLE_PRESSURE_MIN_TIME <= variance[i].first) {
                     // Stable pressure detected
-                    newPressurePlateau(variance[i].first, window[i].second)
-                    if (variance[i].first != window[i].first)
+                    newPressurePlateau(variance[i].first, average[i].second)
+                    if (variance[i].first != average[i].first)
                         throw Exception("Timestamps in moving variance and window do not match")
                     break
                 }
@@ -247,6 +248,16 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         Log.i(TAG, "New pressure plateau registered ($v at $t, aka ${asSeconds(t)} s)")
 
         // Analyze the data here
+        if (pressurePlateaus.size > 1) {
+            for (i in 1..pressurePlateaus.lastIndex) {
+                val diff = pressurePlateaus[i].second - pressurePlateaus[i-1].second
+                val timeDiff = pressurePlateaus[i].first - pressurePlateaus[i-1].first
+                val end = timeDiff < LANDING_PRESSURE_MAX_TIME && diff in LANDING_PRESSURE_DIFF_RANGE
+                val time = asSeconds(pressurePlateaus[i].first)
+                Log.d(TAG, "Plateau $i@${pressurePlateaus[i].second}: time: $time s, tDiff: " +
+                        "${timeDiff/1_000_000_000} s, end?: $end")
+            }
+        }
     }
 
     private fun movingAverage(source: Array<Pair<Long, Float>>, ms: Int): Array<Pair<Long, Float>> {
@@ -320,13 +331,17 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
 
     companion object {
         private const val TAG = "DC"
-        private const val DEFAULT_CHECK_INTERVAL = 60_000_000_000 //nanoseconds (ns)
+        private const val DEFAULT_ACC_CHECK_INTERVAL = 60_000_000_000 //nanoseconds (ns)
+        private const val DEFAULT_BAR_CHECK_INTERVAL = 120_000_000_000 //nanoseconds (ns)
         private const val MAX_RELATIVE_MARGIN_CEIL = 0.1f
 
         /* Acceleration related constants */
 
+        // How many seconds of acceleration data should be stored in the buffer
+        private const val SECONDS_OF_ACC = 120
+
         // Window size for moving average
-        private const val MOVING_AVG_WINDOW_SIZE = 10_000 //milliseconds (ms)
+        private const val ACC_MOVING_AVG_WINDOW_SIZE = 10_000 //milliseconds (ms)
 
         // Acceleration must be within this range to qualify as takeoff roll
         private val TAKEOFF_ROLL_ACC_RANGE = 9.95..10.3 // m/s^2
@@ -351,6 +366,9 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
 
         /* Pressure related constants */
 
+        // How many seconds of pressure data should be stored in the buffer
+        private const val SECONDS_OF_BAR = 480
+
         // Variance must be below this value to qualify as stable
         private const val STABLE_PRESSURE_THRESHOLD = 0.004f //variance
 
@@ -360,6 +378,22 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
 
         // Difference from last stable pressure value must be at least this to qualify as a new
         // plateau
-        private const val STABLE_PRESSURE_MIN_DIFF = 3f //hPa
+        private const val STABLE_PRESSURE_MIN_DIFF = 1.2f //hPa
+
+        // Window size for moving average/variance
+        private const val BAR_MOVING_AVG_WINDOW_SIZE = 30_000 //milliseconds (ms)
+        private const val BAR_MOVING_VAR_WINDOW_SIZE = 10_000 //milliseconds (ms)
+
+        // Change in pressure must be within this range to qualify as landing
+        private val LANDING_PRESSURE_DIFF_RANGE = -23f..-2f //hPa
+
+        // Stable pressure before landing can't last longer than this to qualify as pre-landing
+        // pressure
+        private const val LANDING_PRESSURE_MAX_TIME = 620_000_000_000 //nanoseconds (ns)
+
+        // The computed window size for pressure, compensated with the window size of moving average
+        // and variance
+        private const val COMPUTED_BAR_WINDOW = DEFAULT_BAR_CHECK_INTERVAL +
+                BAR_MOVING_AVG_WINDOW_SIZE*1_000_000L + BAR_MOVING_VAR_WINDOW_SIZE*1_000_000L
     }
 }

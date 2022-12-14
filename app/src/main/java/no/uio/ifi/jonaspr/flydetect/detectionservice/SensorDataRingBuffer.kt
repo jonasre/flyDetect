@@ -1,11 +1,11 @@
 package no.uio.ifi.jonaspr.flydetect.detectionservice
 
-internal class SensorDataRingBuffer(frequency: Float) {
+internal class SensorDataRingBuffer(size: Int) {
     private val array: Array<Pair<Long, Float>?>
     private var topIndex: Int
 
     init {
-        array = arrayOfNulls((frequency * SECONDS_OF_DATA).toInt())
+        array = arrayOfNulls(size)
         topIndex = prevIndex(0)
     }
 
@@ -169,7 +169,6 @@ internal class SensorDataRingBuffer(frequency: Float) {
     }
 
     companion object {
-        private const val SECONDS_OF_DATA = 240
         private const val TIMESTAMP_MULTIPLIER = 1_000_000_000L
     }
 }
