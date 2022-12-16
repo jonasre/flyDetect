@@ -54,15 +54,6 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         val ma = movingAverage(window, ACC_MOVING_AVG_WINDOW_SIZE)
         val mv = movingVariance(window, ACC_MOVING_VAR_WINDOW_SIZE)
 
-        val stableIndex = accStableIndex(mv)
-        if (stableIndex != -1) {
-            accOffset = GRAVITY_ACC - ma[stableIndex].second
-            Log.d(TAG, "accOffset now $accOffset (at ${asSeconds(ma[stableIndex].first)} s)")
-        }
-
-        // Normalize acceleration
-        for (i in ma.indices) ma[i] = Pair(ma[i].first, ma[i].second+accOffset)
-
         var timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL
         // If something of interest is found, increase nextCheckWindow
         // this may be repeated until nextCheckWindow reaches the maximum size of the buffer (ish)
@@ -72,8 +63,27 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
             timeUntilNextCheck += window[0].first - nextAccCheckTime
             Log.w(TAG, "Received empty moving average (gap in data?). Window: ${window.size}")
         }
-        //if (ma.isNotEmpty())
-            //Log.d(TAG, "checking from ${ma[0].first}, window: ${window.size}")
+
+        // Skip the rest of the check if the data is noisy (could be walking/running, and therefore
+        // the user is not in an aircraft)
+        val skip = noiseFilter(mv)
+        if (skip) {
+            nextAccCheckTime += timeUntilNextCheck - (ACC_MOVING_AVG_WINDOW_SIZE * 1_000_000L)
+            Log.v(TAG, "Stopping acc check early because data is too noisy to indicate " +
+                    "flying (approximate time: ${asSeconds(ma[i].first)} s)")
+            return
+        }
+
+        // Find acceleration offset
+        val stableIndex = accStableIndex(mv)
+        if (stableIndex != -1) {
+            accOffset = GRAVITY_ACC - ma[stableIndex].second
+            Log.d(TAG, "accOffset now $accOffset (at ${asSeconds(ma[stableIndex].first)} s)")
+        }
+
+        // Apply normalization
+        for (j in ma.indices) ma[j] = Pair(ma[j].first, ma[j].second+accOffset)
+
         while (i < ma.size) {
             if (!flying && !roll) {
                 // Find first occurrence of acceleration withing takeoff roll range
@@ -240,18 +250,37 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
     }
 
     private fun accStableIndex(mv: Array<Pair<Long, Float>>): Int {
+        return filterThresholdMin(mv, STABLE_ACC_VARIANCE_THRESHOLD, STABLE_ACC_MIN_TIME)
+    }
+
+    private fun noiseFilter(mv: Array<Pair<Long, Float>>): Boolean {
+        return filterThresholdMin(
+            mv,
+            ACC_WALK_FILTER_THRESHOLD,
+            ACC_WALK_MIN_TIME,
+            false
+        ) >= 0
+    }
+
+    private fun filterThresholdMin(
+        data: Array<Pair<Long, Float>>,
+        threshold: Float,
+        minTime: Long,
+        aboveThreshold: Boolean = true
+    ): Int {
         var i = 0
-        var stableStartTime = -1L
-        while (i < mv.size) {
-            val (timestamp, value) = mv[i]
+        var startTime = -1L
+        val m = if (aboveThreshold) 1 else -1
+        val th = threshold*m
+        while (i < data.size) {
+            val (timestamp, value) = data[i]
             i++
-            if (value > STABLE_ACC_VARIANCE_THRESHOLD) {
-                stableStartTime = -1L
+            if (value*m > th) {
+                startTime = -1L
                 continue
-            } else if (stableStartTime < 0) {
-                stableStartTime = timestamp
-            } else if (timestamp - stableStartTime >= STABLE_ACC_MIN_TIME) {
-                // Found stable acceleration
+            } else if (startTime < 0) {
+                startTime = timestamp
+            } else if (timestamp - startTime >= minTime) {
                 return i - 1
             }
         }
@@ -363,6 +392,11 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         private const val STABLE_ACC_VARIANCE_THRESHOLD = 0.004f
 
         private const val STABLE_ACC_MIN_TIME = 10_000_000_000 //nanoseconds (ns)
+
+        // If variance is above this value then the acceleration can not be considered for takeoff
+        private const val ACC_WALK_FILTER_THRESHOLD = 4f
+
+        private const val ACC_WALK_MIN_TIME = 12_000_000_000 //nanoseconds (ns)
 
         // Acceleration must be within this range to qualify as takeoff roll
         private val TAKEOFF_ROLL_ACC_RANGE = 9.95..10.3 // m/s^2
