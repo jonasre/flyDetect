@@ -7,6 +7,7 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
     private var flying: Boolean = false
     private var roll: Boolean = false
     private var rollTimestamp: Long = 0L
+    private var accOffset = 0f
     private val accBuffer = SensorDataRingBuffer((accFrequency * SECONDS_OF_ACC).toInt())
     private val barBuffer = SensorDataRingBuffer((barFrequency * SECONDS_OF_BAR).toInt())
 
@@ -51,6 +52,17 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
     private fun checkAcc() {
         val window = accBuffer.getLatest(nextCheckWindowAcc)
         val ma = movingAverage(window, ACC_MOVING_AVG_WINDOW_SIZE)
+        val mv = movingVariance(window, ACC_MOVING_VAR_WINDOW_SIZE)
+
+        val stableIndex = accStableIndex(mv)
+        if (stableIndex != -1) {
+            accOffset = GRAVITY_ACC - ma[stableIndex].second
+            Log.d(TAG, "accOffset now $accOffset (at ${asSeconds(ma[stableIndex].first)} s)")
+        }
+
+        // Normalize acceleration
+        for (i in ma.indices) ma[i] = Pair(ma[i].first, ma[i].second+accOffset)
+
         var timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL
         // If something of interest is found, increase nextCheckWindow
         // this may be repeated until nextCheckWindow reaches the maximum size of the buffer (ish)
@@ -227,6 +239,25 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         nextBarCheckTime += timeUntilNextCheck
     }
 
+    private fun accStableIndex(mv: Array<Pair<Long, Float>>): Int {
+        var i = 0
+        var stableStartTime = -1L
+        while (i < mv.size) {
+            val (timestamp, value) = mv[i]
+            i++
+            if (value > STABLE_ACC_VARIANCE_THRESHOLD) {
+                stableStartTime = -1L
+                continue
+            } else if (stableStartTime < 0) {
+                stableStartTime = timestamp
+            } else if (timestamp - stableStartTime >= STABLE_ACC_MIN_TIME) {
+                // Found stable acceleration
+                return i - 1
+            }
+        }
+        return -1
+    }
+
     private fun newPressurePlateau(t: Long, v: Float) {
         Log.v(TAG, "New pressure plateau registered ($v at $t, aka ${asSeconds(t)} s)")
 
@@ -316,11 +347,22 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
 
         /* Acceleration related constants */
 
+        // Standard gravitational acceleration on earth
+        private const val GRAVITY_ACC = 9.80665f // m/s^2
+
         // How many seconds of acceleration data should be stored in the buffer
         private const val SECONDS_OF_ACC = 120
 
         // Window size for moving average
         private const val ACC_MOVING_AVG_WINDOW_SIZE = 10_000 //milliseconds (ms)
+
+        // Window size for moving variance
+        private const val ACC_MOVING_VAR_WINDOW_SIZE = 10_000 //milliseconds (ms)
+
+        // Variance must be below this value to consider acceleration stable
+        private const val STABLE_ACC_VARIANCE_THRESHOLD = 0.004f
+
+        private const val STABLE_ACC_MIN_TIME = 10_000_000_000 //nanoseconds (ns)
 
         // Acceleration must be within this range to qualify as takeoff roll
         private val TAKEOFF_ROLL_ACC_RANGE = 9.95..10.3 // m/s^2
