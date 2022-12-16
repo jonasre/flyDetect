@@ -87,14 +87,8 @@ class CustomSensorManager(
         l.resetCounters()
 
         // Skip headers and markers
-        var expectedBlanks = 2
         var i = 0
-        while (expectedBlanks > 0) {
-            if (lines[i] == "") {
-                expectedBlanks--
-            }
-            i++
-        }
+        while (lines[i].indexOf(":") == -1) i++
         // At this point, the rest of the list should be data
         lines = lines.subList(i, lines.size)
 

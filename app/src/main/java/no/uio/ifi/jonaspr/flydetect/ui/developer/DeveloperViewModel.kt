@@ -78,6 +78,7 @@ class DeveloperViewModel : ViewModel() {
                 var markersLocal = ""
 
                 var i = 2
+                if (lines[i + 1] == "") i++
                 while (lines[++i] != "") {
                     lines[i].split(";").let {
                         val timestamp = (it[1].toLong()-startTime)/1000
