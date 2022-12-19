@@ -15,7 +15,9 @@ class CustomSensorManager(
 
     private val sensorMap = HashMap<Int, Sensor>() // Map sensor type with Sensor object
     private val samplingPeriodNsMap = HashMap<Int, Long>() // Map for holding sampling periods
-    private lateinit var listener: SensorEventListener // Will hold the listener
+    private val listeners = HashMap<SensorEventListener, Int>() // Holds the listeners
+    private val listenerByTypeMap = HashMap<Int, SensorEventListener>() //SensorType:Listener
+    private val eventCount = HashMap<Int, Int>() //SensorType:NumberOfEvents
     private var running = false
     private var currentIndex = 0
     private var stop = false
@@ -36,9 +38,11 @@ class CustomSensorManager(
         // Make sure only one is registered at the same time
         if (sensorMap.containsKey(sensor.type)) return false
         sensorMap[sensor.type] = sensor
+        if (!eventCount.containsKey(sensor.type)) eventCount[sensor.type] = 0
         samplingPeriodNsMap[sensor.type] = samplingPeriodUs*1000L
 
-        this.listener = listener
+        listeners[listener] = sensor.type
+        listenerByTypeMap[sensor.type] = listener
 
         if (!running) {
             running = true
@@ -48,7 +52,12 @@ class CustomSensorManager(
     }
 
     override fun unregisterListener(listener: SensorEventListener) {
-        stop = true
+        val type = listeners[listener]
+        listeners.remove(listener)
+        listenerByTypeMap.remove(type)
+        if (listeners.isEmpty()) {
+            stop = true
+        }
     }
 
     override fun getReplayProgress(): Int {
@@ -81,11 +90,7 @@ class CustomSensorManager(
     }
 
     override fun run() {
-        Thread.sleep(1000)
-
-        val l = listener as CustomSensorEventListener
-        l.resetCounters()
-
+        Thread.sleep(200)
         // Skip headers and markers
         var i = 0
         while (lines[i].indexOf(":") == -1) i++
@@ -97,7 +102,7 @@ class CustomSensorManager(
         } else {
             while (currentIndex < lines.size && !stop) {
                 val event = newSensorEvent(lines[currentIndex])
-                listener.onSensorChanged(event)
+                sendSensorEvent(event)
                 currentIndex++
                 //if (currentIndex % 10 == 0) Thread.sleep(1) // <- delay
             }
@@ -105,7 +110,8 @@ class CustomSensorManager(
 
         if (currentIndex == lines.size) Log.i(TAG, "Replay complete")
         else Log.i(TAG, "Replay stopped prematurely")
-        Log.d(TAG, "Forwarded ${l.accCount} accelerometer and ${l.barCount} barometer samples")
+        Log.d(TAG, "Forwarded ${eventCount[Sensor.TYPE_ACCELEROMETER]} accelerometer and " +
+                "${eventCount[Sensor.TYPE_PRESSURE]} barometer samples")
         running = false
         stop = false
     }
@@ -140,7 +146,7 @@ class CustomSensorManager(
             // If this is the first event for this sensor type, or if there is a hole in the data
             if (prev == null || cur.timestamp - prev.timestamp > 1_000_000_000) {
                 // Send the SensorEvent to the listener
-                listener.onSensorChanged(cur)
+                sendSensorEvent(cur)
                 // Update when next SensorEvent should be inserted
                 nextTimestampMap[cur.sensor.type] =
                     cur.timestamp + samplingPeriodNsMap[cur.sensor.type]!!
@@ -149,9 +155,7 @@ class CustomSensorManager(
             // If the timestamp of this event (cur) is greater or equal to the next scheduled event
             while (cur.timestamp >= nextTimestampMap[cur.sensor.type]!!) {
                 // Send the new SensorEvent to the listener
-                listener.onSensorChanged(
-                    newSensorEventAt(nextTimestampMap[cur.sensor.type]!!, prev, cur)
-                )
+                sendSensorEvent(newSensorEventAt(nextTimestampMap[cur.sensor.type]!!, prev, cur))
                 // Update when next SensorEvent should be inserted
                 nextTimestampMap[cur.sensor.type] =
                     nextTimestampMap[cur.sensor.type]!! + samplingPeriodNsMap[cur.sensor.type]!!
@@ -193,6 +197,15 @@ class CustomSensorManager(
             this.timestamp = timestamp
             for (j in values.indices) // Calculate the new values
                 values[j] = (event1.values[j] + (a*deltaY[j])).toFloat()
+        }
+    }
+
+    private fun sendSensorEvent(event: SensorEvent) {
+        val listener = listenerByTypeMap[event.sensor.type]
+        if (listener != null) {
+            listenerByTypeMap[event.sensor.type]?.onSensorChanged(event)
+            val count = eventCount[event.sensor.type]
+            if (count != null) eventCount[event.sensor.type] = count + 1
         }
     }
 

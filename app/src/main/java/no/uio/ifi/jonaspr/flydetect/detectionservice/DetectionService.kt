@@ -23,15 +23,16 @@ import no.uio.ifi.jonaspr.flydetect.Util
 class DetectionService : Service() {
     inner class LocalBinder : Binder() {
         fun stop() = this@DetectionService.stop()
-        fun latestAccSample() = sensorListener.latestAcc
-        fun latestBarSample() = sensorListener.latestBar
+        fun latestAccSample() = accListener.latest
+        fun latestBarSample() = barListener.latest
         fun replayProgress() = sensorManager?.getReplayProgress() ?: 0
         fun flying() = decisionComponent.currentlyFlying()
     }
     private val binder = LocalBinder()
 
     private var sensorManager: SensorManagerInterface? = null
-    private lateinit var sensorListener: CustomSensorEventListener
+    private lateinit var accListener: AccelerometerListener
+    private lateinit var barListener: BarometerListener
     private lateinit var decisionComponent: DecisionComponent
 
     override fun onBind(intent: Intent): IBinder {
@@ -60,7 +61,8 @@ class DetectionService : Service() {
         val resample = intent.getBooleanExtra("resampleSensorFile", true)
 
         decisionComponent = DecisionComponent(accSamplingFrequency, barSamplingFrequency)
-        sensorListener = CustomSensorEventListener(decisionComponent)
+        accListener = AccelerometerListener(decisionComponent)
+        barListener = BarometerListener(decisionComponent)
 
         CoroutineScope(Dispatchers.Default).launch {
 
@@ -83,13 +85,13 @@ class DetectionService : Service() {
                 SensorManagerWrapper(getSystemService(Context.SENSOR_SERVICE) as SensorManager)
             }.apply {
                 registerListener(
-                    sensorListener,
+                    accListener,
                     getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
                     Util.convertHzMicroseconds(accSamplingFrequency),
                     0
                 )
                 registerListener(
-                    sensorListener,
+                    barListener,
                     getDefaultSensor(Sensor.TYPE_PRESSURE),
                     Util.convertHzMicroseconds(barSamplingFrequency),
                     0
@@ -133,7 +135,8 @@ class DetectionService : Service() {
     fun stop() {
         Log.i(TAG, "Stop signal received")
         //unregister listeners, stop other things
-        sensorManager?.unregisterListener(sensorListener)
+        sensorManager?.unregisterListener(accListener)
+        sensorManager?.unregisterListener(barListener)
         stopSelf()
     }
 

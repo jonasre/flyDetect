@@ -12,7 +12,6 @@ import no.uio.ifi.jonaspr.flydetect.MainActivity
 import no.uio.ifi.jonaspr.flydetect.R
 import no.uio.ifi.jonaspr.flydetect.databinding.FragmentHomeBinding
 import no.uio.ifi.jonaspr.flydetect.detectionservice.DetectionService
-import kotlin.math.sqrt
 
 class HomeFragment : Fragment() {
 
@@ -81,12 +80,9 @@ class HomeFragment : Fragment() {
                 job = CoroutineScope(Dispatchers.Main).launch {
                     while (true) {
                         try {
-                            val magnitude = it.latestAccSample().let { v ->
-                                sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
-                            }
                             binding.flyingStatus.text = if (it.flying()) "Flying!" else "Not flying"
                             binding.acceleration.text =
-                                String.format(getString(R.string.acceleration_display), magnitude)
+                                String.format(getString(R.string.acceleration_display), it.latestAccSample())
                             binding.pressure.text =
                                 String.format(getString(R.string.pressure_display), it.latestBarSample())
                             binding.replayProgress.progress = serviceBinder?.replayProgress()!!
