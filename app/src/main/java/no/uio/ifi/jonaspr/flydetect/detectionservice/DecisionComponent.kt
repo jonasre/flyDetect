@@ -1,9 +1,10 @@
 package no.uio.ifi.jonaspr.flydetect.detectionservice
 
+import android.hardware.Sensor
 import android.util.Log
 import kotlin.math.abs
 
-class DecisionComponent(accFrequency: Float, barFrequency: Float) {
+class DecisionComponent(private val service: DetectionService, accFrequency: Float, barFrequency: Float) {
     private var flying: Boolean = false
     private var roll: Boolean = false
     private var rollTimestamp: Long = 0L
@@ -47,6 +48,19 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         nextAccCheckTime = i + DEFAULT_ACC_CHECK_INTERVAL
         nextBarCheckTime = i + COMPUTED_BAR_WINDOW
         startTime = i
+    }
+
+    fun setFlyingStatus(x: Boolean) {
+        if (x == flying) return // Do nothing if status is not changed
+        flying = x
+        // Register/unregister listeners accordingly
+        if (flying) {
+            service.registerSensorListener(Sensor.TYPE_PRESSURE)
+            service.unregisterSensorListener(Sensor.TYPE_ACCELEROMETER)
+        } else {
+            service.registerSensorListener(Sensor.TYPE_ACCELEROMETER)
+            service.unregisterSensorListener(Sensor.TYPE_PRESSURE)
+        }
     }
 
     private fun checkAcc() {
@@ -183,7 +197,7 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
                     }
                     // If this point is reached then liftoff was detected
                     // takeoff roll + liftoff = flight
-                    flying = true
+                    setFlyingStatus(true)
                     roll = false
                     Log.i(TAG, "Flight detected at ${ma[i].first} (aka " +
                             "${asSeconds(ma[i].first)} s)")
@@ -203,7 +217,7 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         var timeUntilNextCheck = DEFAULT_BAR_CHECK_INTERVAL
 
         var i = 0
-        while (i < variance.size) {
+        while (i < variance.size && flying) {
             // Loop until end of array or until pressure has left its stable level
             while (
                 i < variance.size &&
@@ -294,7 +308,7 @@ class DecisionComponent(accFrequency: Float, barFrequency: Float) {
         val timeDiff = t - lastPressurePlateau.first
         if (timeDiff < LANDING_PRESSURE_MAX_TIME && diff in LANDING_PRESSURE_DIFF_RANGE) {
             Log.i(TAG, "Landing detected at $t (aka ${asSeconds(t)} s)")
-            flying = false
+            setFlyingStatus(false)
         }
         lastPressurePlateau = Pair(t, v)
     }

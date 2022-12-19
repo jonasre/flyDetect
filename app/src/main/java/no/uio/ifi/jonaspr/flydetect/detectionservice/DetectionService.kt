@@ -4,6 +4,7 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.hardware.Sensor
+import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.net.Uri
 import android.os.Binder
@@ -35,6 +36,9 @@ class DetectionService : Service() {
     private lateinit var barListener: BarometerListener
     private lateinit var decisionComponent: DecisionComponent
 
+    private var accSamplingFrequency = -1f
+    private var barSamplingFrequency = -1f
+
     override fun onBind(intent: Intent): IBinder {
         return binder
     }
@@ -43,11 +47,8 @@ class DetectionService : Service() {
         Log.i(TAG, "Start command received")
         running = true
 
-        val accSamplingFrequency =
-            intent!!.getFloatExtra("accSamplingFrequency", -1f)
-
-        val barSamplingFrequency =
-            intent.getFloatExtra("barSamplingFrequency", -1f)
+        accSamplingFrequency = intent!!.getFloatExtra("accSamplingFrequency", -1f)
+        barSamplingFrequency = intent.getFloatExtra("barSamplingFrequency", -1f)
 
         // Get sensorFile for sensor injection (optional)
         // intent.getParcelableExtra(key) is deprecated since API level 33
@@ -60,12 +61,12 @@ class DetectionService : Service() {
 
         val resample = intent.getBooleanExtra("resampleSensorFile", true)
 
-        decisionComponent = DecisionComponent(accSamplingFrequency, barSamplingFrequency)
+        decisionComponent =
+            DecisionComponent(this, accSamplingFrequency, barSamplingFrequency)
         accListener = AccelerometerListener(decisionComponent)
         barListener = BarometerListener(decisionComponent)
 
         CoroutineScope(Dispatchers.Default).launch {
-
             // Use CustomSensorManager if sensor data should be injected,
             // else use default SensorManager
             sensorManager = if (sensorFile != null) {
@@ -83,20 +84,8 @@ class DetectionService : Service() {
             } else {
                 decisionComponent.setStartTime(SystemClock.elapsedRealtimeNanos())
                 SensorManagerWrapper(getSystemService(Context.SENSOR_SERVICE) as SensorManager)
-            }.apply {
-                registerListener(
-                    accListener,
-                    getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
-                    Util.convertHzMicroseconds(accSamplingFrequency),
-                    0
-                )
-                registerListener(
-                    barListener,
-                    getDefaultSensor(Sensor.TYPE_PRESSURE),
-                    Util.convertHzMicroseconds(barSamplingFrequency),
-                    0
-                )
             }
+            registerSensorListener(Sensor.TYPE_ACCELEROMETER)
         }
 
         startForeground()
@@ -130,6 +119,39 @@ class DetectionService : Service() {
 
         val notificationID = 34
         startForeground(notificationID, notification)
+    }
+
+    fun registerSensorListener(type: Int) {
+        val listener: SensorEventListener
+        val samplingFrequency: Float
+        when (type) {
+            Sensor.TYPE_PRESSURE -> {
+                listener = barListener
+                samplingFrequency = barSamplingFrequency
+            }
+            Sensor.TYPE_ACCELEROMETER -> {
+                listener = accListener
+                samplingFrequency = accSamplingFrequency
+            }
+            else -> return
+        }
+        sensorManager?.apply {
+            registerListener(
+                listener,
+                getDefaultSensor(type),
+                Util.convertHzMicroseconds(samplingFrequency),
+                0
+            )
+        }
+    }
+
+    fun unregisterSensorListener(type: Int) {
+        val listener = when (type) {
+            Sensor.TYPE_PRESSURE -> barListener
+            Sensor.TYPE_ACCELEROMETER -> accListener
+            else -> return
+        }
+        sensorManager?.unregisterListener(listener)
     }
 
     fun stop() {

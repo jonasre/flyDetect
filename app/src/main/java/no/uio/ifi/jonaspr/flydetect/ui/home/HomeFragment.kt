@@ -62,8 +62,7 @@ class HomeFragment : Fragment() {
     private fun stopUiUpdate() {
         job?.cancel()
         binding.flyingStatus.text = ""
-        binding.pressure.text = ""
-        binding.acceleration.text = ""
+        binding.latestSensorData.text = ""
     }
 
     override fun onResume() {
@@ -80,11 +79,12 @@ class HomeFragment : Fragment() {
                 job = CoroutineScope(Dispatchers.Main).launch {
                     while (true) {
                         try {
-                            binding.flyingStatus.text = if (it.flying()) "Flying!" else "Not flying"
-                            binding.acceleration.text =
-                                String.format(getString(R.string.acceleration_display), it.latestAccSample())
-                            binding.pressure.text =
+                            val flying = it.flying()
+                            binding.flyingStatus.text = if (flying) "Flying!" else "Not flying"
+                            binding.latestSensorData.text = if (flying)
                                 String.format(getString(R.string.pressure_display), it.latestBarSample())
+                            else
+                                String.format(getString(R.string.acceleration_display), it.latestAccSample())
                             binding.replayProgress.progress = serviceBinder?.replayProgress()!!
                             delay(100)
                         } catch (e: CancellationException) {

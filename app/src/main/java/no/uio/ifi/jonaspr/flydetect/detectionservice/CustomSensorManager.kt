@@ -36,7 +36,10 @@ class CustomSensorManager(
         maxReportLatencyUs: Int
     ): Boolean {
         // Make sure only one is registered at the same time
-        if (sensorMap.containsKey(sensor.type)) return false
+        if (listeners.containsKey(listener)) {
+            Log.w(TAG, "Attempted to register listener twice")
+            return false
+        }
         sensorMap[sensor.type] = sensor
         if (!eventCount.containsKey(sensor.type)) eventCount[sensor.type] = 0
         samplingPeriodNsMap[sensor.type] = samplingPeriodUs*1000L
@@ -140,6 +143,7 @@ class CustomSensorManager(
             val cur = newSensorEvent(sensorEventStrings[currentIndex++])
             // Load the previous SensorEvent related to this one (cur), and save cur as previous
             // for the next iteration
+            if (cur.sensor == null) continue
             val prev: SensorEvent? = lastEventMap[cur.sensor.type]
             lastEventMap[cur.sensor.type] = cur
 
@@ -201,6 +205,7 @@ class CustomSensorManager(
     }
 
     private fun sendSensorEvent(event: SensorEvent) {
+        if (event.sensor == null) return
         val listener = listenerByTypeMap[event.sensor.type]
         if (listener != null) {
             listenerByTypeMap[event.sensor.type]?.onSensorChanged(event)
