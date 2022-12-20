@@ -78,9 +78,11 @@ class HomeFragment : Fragment() {
             if (it != null) {
                 binding.sensorFileLoaded.visibility = View.VISIBLE
                 binding.replayProgress.visibility = View.VISIBLE
+                binding.flightButton.isEnabled = false
             } else {
                 binding.sensorFileLoaded.visibility = View.GONE
                 binding.replayProgress.visibility = View.GONE
+                binding.flightButton.isEnabled = true
             }
         }
         return root
