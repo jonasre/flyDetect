@@ -1,5 +1,6 @@
 package no.uio.ifi.jonaspr.flydetect.ui.home
 
+import android.app.AlertDialog
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -46,6 +47,32 @@ class HomeFragment : Fragment() {
             }
         }
 
+        binding.flightButton.setOnClickListener {
+            if (serviceBinder == null)  {
+                Log.e(TAG, "Flight button visible while service is disconnected")
+                return@setOnClickListener
+            }
+            serviceBinder?.let {
+                val status = it.flying()
+                val newState = if (status) "NOT FLYING" else "FLYING"
+                activity?.let { a ->
+                    AlertDialog.Builder(a).apply {
+                        setTitle("Confirmation")
+                        setMessage("Are you sure you want to force the flight status to " +
+                                "$newState? This can cause problems with the detection.")
+                        setPositiveButton("Yes") { _, _ ->
+                            Log.d(TAG, "Dialog OK")
+                            it.forceFlight(!status)
+                        }
+                        setNegativeButton("No") { _, _ ->
+                            Log.d(TAG, "Dialog CANCEL")
+                        }
+                        show()
+                    }
+                }
+            }
+        }
+
         (activity as MainActivity).sensorFile().observe(viewLifecycleOwner) {
             Log.d(TAG, "Sensor file update")
             if (it != null) {
@@ -74,13 +101,13 @@ class HomeFragment : Fragment() {
                 // Checks the switch when the service is connected, necessary when starting the app
                 // while the service is already running
                 binding.masterSwitch.isChecked = true
+                binding.flightButton.visibility = View.VISIBLE
 
 
                 job = CoroutineScope(Dispatchers.Main).launch {
                     while (true) {
                         try {
                             val flying = it.flying()
-                            binding.flyingStatus.text = if (flying) "Flying!" else "Not flying"
                             binding.latestSensorData.text = if (flying)
                                 String.format(getString(R.string.pressure_display), it.latestBarSample())
                             else
@@ -98,9 +125,28 @@ class HomeFragment : Fragment() {
                     }
                 }
 
+                it.flyingLiveData().observe(viewLifecycleOwner) { flying ->
+                    if (flying) {
+                        binding.flyingStatus.text = getString(R.string.flyingStateTrue)
+                        binding.flightButton.text = getString(R.string.forceFlightFalse)
+                        binding.flightButton.setCompoundDrawablesWithIntrinsicBounds(
+                            R.drawable.ic_baseline_airplanemode_inactive_24,
+                            0, 0, 0
+                        )
+                    } else {
+                        binding.flyingStatus.text = getString(R.string.flyingStateFalse)
+                        binding.flightButton.text = getString(R.string.forceFlightTrue)
+                        binding.flightButton.setCompoundDrawablesWithIntrinsicBounds(
+                            R.drawable.ic_baseline_airplanemode_active_24,
+                            0, 0, 0
+                        )
+                    }
+                }
+
             } else {
                 stopUiUpdate()
                 binding.replayProgress.progress = 0
+                binding.flightButton.visibility = View.INVISIBLE
             }
         }
     }

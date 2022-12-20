@@ -2,10 +2,13 @@ package no.uio.ifi.jonaspr.flydetect.detectionservice
 
 import android.hardware.Sensor
 import android.util.Log
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import kotlin.math.abs
 
 class DecisionComponent(private val service: DetectionService, accFrequency: Float, barFrequency: Float) {
-    private var flying: Boolean = false
+    private var flying = false
+    private val flyingLive = MutableLiveData(false)
     private var roll: Boolean = false
     private var rollTimestamp: Long = 0L
     private var accOffset = 0f
@@ -23,7 +26,8 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
     private var nextCheckWindowAcc: Int = (DEFAULT_ACC_CHECK_INTERVAL/1_000_000_000).toInt()
     private var nextCheckWindowBar: Int = (COMPUTED_BAR_WINDOW/1_000_000_000).toInt()
 
-    fun currentlyFlying() = flying
+    fun currentlyFlying() = flyingLive.value!!
+    fun flyingLiveData(): LiveData<Boolean> = flyingLive
     private fun asSeconds(t: Long) = (t-startTime)/1_000_000_000
 
     // Adds an acceleration sample to its buffer
@@ -53,6 +57,7 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
     fun setFlyingStatus(x: Boolean) {
         if (x == flying) return // Do nothing if status is not changed
         flying = x
+        flyingLive.postValue(x)
         // Register/unregister listeners accordingly
         if (flying) {
             service.registerSensorListener(Sensor.TYPE_PRESSURE)

@@ -28,6 +28,8 @@ class DetectionService : Service() {
         fun latestBarSample() = barListener.latest
         fun replayProgress() = sensorManager?.getReplayProgress() ?: 0
         fun flying() = decisionComponent.currentlyFlying()
+        fun flyingLiveData() = decisionComponent.flyingLiveData()
+        internal fun forceFlight(x: Boolean) = decisionComponent.setFlyingStatus(x)
     }
     private val binder = LocalBinder()
 

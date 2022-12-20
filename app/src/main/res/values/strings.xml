@@ -35,4 +35,8 @@
     <string name="sampling_rates">Sampling rates (can be very inaccurate):</string>
     <string name="markers">Markers:</string>
     <string name="sensor_file_loaded">Sensor file loaded, physical sensors will not be used</string>
+    <string name="flyingStateTrue">Flying!</string>
+    <string name="forceFlightFalse">Force stop flight</string>
+    <string name="forceFlightTrue">Force flight</string>
+    <string name="flyingStateFalse">Not flying</string>
 </resources>
