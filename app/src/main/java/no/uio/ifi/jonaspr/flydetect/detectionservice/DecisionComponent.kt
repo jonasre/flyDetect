@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import kotlin.math.abs
+import kotlin.math.max
 
 class DecisionComponent(private val service: DetectionService, accFrequency: Float, barFrequency: Float) {
     private var flying = false
@@ -23,7 +24,7 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
 
     private var startTime = 0L
 
-    private var nextCheckWindowAcc: Int = (DEFAULT_ACC_CHECK_INTERVAL/1_000_000_000).toInt()
+    private var nextCheckWindowAcc: Int = (COMPUTED_ACC_WINDOW/1_000_000_000).toInt()
     private var nextCheckWindowBar: Int = (COMPUTED_BAR_WINDOW/1_000_000_000).toInt()
 
     fun currentlyFlying() = flyingLive.value!!
@@ -49,7 +50,7 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
     // Sets the timestamp for last data check for both sensor types
     // This function should only be called once to initialize before sensor data is provided
     fun setStartTime(i: Long) {
-        nextAccCheckTime = i + DEFAULT_ACC_CHECK_INTERVAL
+        nextAccCheckTime = i + COMPUTED_ACC_WINDOW
         nextBarCheckTime = i + COMPUTED_BAR_WINDOW
         startTime = i
     }
@@ -87,7 +88,7 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
         // the user is not in an aircraft)
         val skip = noiseFilter(mv)
         if (skip) {
-            nextAccCheckTime += timeUntilNextCheck - (ACC_MOVING_AVG_WINDOW_SIZE * 1_000_000L)
+            nextAccCheckTime += timeUntilNextCheck
             Log.v(TAG, "Stopping acc check early because data is too noisy to indicate " +
                     "flying (approximate time: ${asSeconds(ma[i].first)} s)")
             return
@@ -132,7 +133,7 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
                     Log.v(TAG, "Some data looks like takeoff roll, awaiting more to confirm")
                     // Could be takeoff roll, but we ran out of data.
                     // Next check should be done sooner than normal
-                    timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL / 2
+                    timeUntilNextCheck /= 2
                 } else {
                     Log.v(TAG, "Takeoff roll detected at ${ma[i].first} " +
                             "(aka ${asSeconds(ma[i].first)}s)")
@@ -167,7 +168,7 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
                         if (i >= ma.size) {
                             Log.v(TAG, "(STAGE 1) Not enough data in buffer to detect" +
                                     " liftoff, next check will be scheduled sooner")
-                            timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL / 2
+                            timeUntilNextCheck /= 2
                             break
                         }
                     }
@@ -189,7 +190,7 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
                     if (i >= ma.size) {
                         Log.v(TAG, "(STAGE 2) Not enough data in buffer to detect liftoff, " +
                                 "next check will be scheduled sooner")
-                        timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL / 2
+                        timeUntilNextCheck /= 2
                         break
                     }
                     // Liftoff possible, but too little data to be sure
@@ -212,7 +213,7 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
                 break
             }
         }
-        nextAccCheckTime += timeUntilNextCheck - (ACC_MOVING_AVG_WINDOW_SIZE * 1_000_000L)
+        nextAccCheckTime += timeUntilNextCheck
     }
 
     private fun checkBar() {
@@ -436,6 +437,12 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
 
         // Liftoff cannot be detected without at least this many sensor samples
         private const val MIN_EVENTS_LIFTOFF = (LIFTOFF_TIME_MIN/1_000_000_000) * 5
+
+        // The computed window size for acceleration, compensated with the window size of moving
+        // average or variance (whichever is greater)
+        private val COMPUTED_ACC_WINDOW = DEFAULT_ACC_CHECK_INTERVAL + max(
+            ACC_MOVING_AVG_WINDOW_SIZE*1_000_000L, ACC_MOVING_VAR_WINDOW_SIZE*1_000_000L
+        )
 
 
         /* Pressure related constants */
