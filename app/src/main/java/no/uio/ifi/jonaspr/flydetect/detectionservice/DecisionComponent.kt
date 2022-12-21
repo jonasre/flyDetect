@@ -33,16 +33,36 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
 
     // Adds an acceleration sample to its buffer
     fun addAccSample(event: Pair<Long, Float>) {
-        accBuffer.insert(event)
+        accBuffer.latestEntry()?.let {
+            // If the time difference between the newest event and the one before it is greater
+            // than ACC_MAX_DELAY, check the buffer before adding the new event
+            if (event.first - it.first > ACC_MAX_DELAY) {
+                checkAcc()
+                Log.d(TAG, "[acc] Gap in data or rogue event at ${event.first} " +
+                        "(aka ${asSeconds(event.first)} s)")
+            }
+        }
+        accBuffer.insert(event) // Insert the new event
         if (event.first >= nextAccCheckTime) {
+            // Check the buffer if scheduled check time is reached
             checkAcc()
         }
     }
 
     // Adds a pressure sample to its buffer
     fun addBarSample(event: Pair<Long, Float>) {
-        barBuffer.insert(event)
+        barBuffer.latestEntry()?.let {
+            // If the time difference between the newest event and the one before it is greater
+            // than BAR_MAX_DELAY, check the buffer before adding the new event
+            if (event.first - it.first > BAR_MAX_DELAY) {
+                checkBar()
+                Log.d(TAG, "[bar] Gap in data or rogue event at ${event.first} " +
+                        "(aka ${asSeconds(event.first)} s)")
+            }
+        }
+        barBuffer.insert(event) // Insert the new event
         if (event.first >= nextBarCheckTime) {
+            // Check the buffer if scheduled check time is reached
             checkBar()
         }
     }
@@ -63,9 +83,11 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
         if (flying) {
             service.registerSensorListener(Sensor.TYPE_PRESSURE)
             service.unregisterSensorListener(Sensor.TYPE_ACCELEROMETER)
+            accBuffer.clear()
         } else {
             service.registerSensorListener(Sensor.TYPE_ACCELEROMETER)
             service.unregisterSensorListener(Sensor.TYPE_PRESSURE)
+            barBuffer.clear()
         }
     }
 
@@ -402,6 +424,10 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
         // How many seconds of acceleration data should be stored in the buffer
         private const val SECONDS_OF_ACC = 120
 
+        // If the gap between the newest event and the one before it exceeds this value, the buffer
+        // before the newest event will be checked to avoid skipping data
+        private const val ACC_MAX_DELAY = 2_000_000_000
+
         // Window size for moving average
         private const val ACC_MOVING_AVG_WINDOW_SIZE = 10_000 //milliseconds (ms)
 
@@ -449,6 +475,10 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
 
         // How many seconds of pressure data should be stored in the buffer
         private const val SECONDS_OF_BAR = 480
+
+        // If the gap between the newest event and the one before it exceeds this value, the buffer
+        // before the newest event will be checked to avoid skipping data
+        private const val BAR_MAX_DELAY = 8_000_000_000
 
         // Variance must be below this value to qualify as stable
         private const val STABLE_PRESSURE_THRESHOLD = 0.004f //variance

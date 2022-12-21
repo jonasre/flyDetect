@@ -9,7 +9,7 @@ internal class SensorDataRingBuffer(size: Int) {
         topIndex = prevIndex(0)
     }
 
-    fun size() = array.size
+    fun latestEntry() = array[topIndex]
 
     // Insert a SensorEvent object
     fun insert(event: Pair<Long, Float>) {
@@ -43,6 +43,11 @@ internal class SensorDataRingBuffer(size: Int) {
         } else {
             array.copyOfRange(cutoffIndex, topIndex + 1) as Array<Pair<Long, Float>>
         }
+    }
+
+    fun clear() {
+        array.fill(null)
+        //topIndex = prevIndex(0)
     }
 
     // Moves elements to make space for an element at index insertionPoint,
