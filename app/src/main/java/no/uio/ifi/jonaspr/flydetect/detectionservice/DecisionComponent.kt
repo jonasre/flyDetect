@@ -16,6 +16,12 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
     private val accBuffer = SensorDataRingBuffer((accFrequency * SECONDS_OF_ACC).toInt())
     private val barBuffer = SensorDataRingBuffer((barFrequency * SECONDS_OF_BAR).toInt())
 
+    private var flightStart = -1
+    private var flightStartDetect = -1
+    private var flightEnd = -1
+    private var flightEndDetect = -1
+    private var flightCount = 0
+
     // Pair of <timestamp, pressure> where pressure is stable.
     private var lastPressurePlateau: Pair<Long, Float> = Pair(0, 0f)
 
@@ -29,7 +35,17 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
 
     fun currentlyFlying() = flyingLive.value!!
     fun flyingLiveData(): LiveData<Boolean> = flyingLive
-    private fun asSeconds(t: Long) = (t-startTime)/1_000_000_000
+    private fun asSeconds(t: Long): Int = ((t-startTime)/1_000_000_000).toInt()
+
+    fun flightStats(): Map<String, Int> {
+        return mapOf(
+            "flightStart" to flightStart,
+            "flightStartDetect" to flightStartDetect,
+            "flightEnd" to flightEnd,
+            "flightEndDetect" to flightEndDetect,
+            "flightCount" to flightCount
+        )
+    }
 
     // Adds an acceleration sample to its buffer
     fun addAccSample(event: Pair<Long, Float>) {
@@ -76,9 +92,15 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
     }
 
     fun setFlyingStatus(x: Boolean) {
+        setFlyingStatus(x, -1, -1)
+    }
+
+    private fun setFlyingStatus(x: Boolean, t1: Long, t2: Long) {
         if (x == flying) return // Do nothing if status is not changed
         flying = x
         flyingLive.postValue(x)
+
+
         // Register/unregister listeners accordingly
         if (flying) {
             service.registerSensorListener(Sensor.TYPE_PRESSURE)
@@ -88,6 +110,17 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
             service.registerSensorListener(Sensor.TYPE_ACCELEROMETER)
             service.unregisterSensorListener(Sensor.TYPE_PRESSURE)
             barBuffer.clear()
+        }
+
+        // Stats variables
+        if (t1 < 0) return
+        if (flying) {
+            flightCount++
+            flightStart = asSeconds(t1)
+            flightStartDetect = asSeconds(t2)
+        } else {
+            flightEnd = asSeconds(t1)
+            flightEndDetect = asSeconds(t2)
         }
     }
 
@@ -225,7 +258,7 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
                     }
                     // If this point is reached then liftoff was detected
                     // takeoff roll + liftoff = flight
-                    setFlyingStatus(true)
+                    setFlyingStatus(true, ma[i].first, window[window.lastIndex].first)
                     roll = false
                     Log.i(TAG, "Flight detected at ${ma[i].first} (aka " +
                             "${asSeconds(ma[i].first)} s)")
@@ -271,7 +304,10 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
             while (i < variance.size && variance[i].second < STABLE_PRESSURE_THRESHOLD) {
                 if (stableStartTime + STABLE_PRESSURE_MIN_TIME <= variance[i].first) {
                     // Stable pressure detected
-                    newPressurePlateau(variance[i].first, average[i].second)
+                    val landing = newPressurePlateau(variance[i].first, average[i].second)
+                    if (landing)
+                        // Set flying status false if pressure indicates landing
+                        setFlyingStatus(false, variance[i].first, window[window.lastIndex].first)
                     if (variance[i].first != average[i].first)
                         throw Exception("Timestamps in moving variance and window do not match")
                     break
@@ -329,16 +365,17 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
         return -1
     }
 
-    private fun newPressurePlateau(t: Long, v: Float) {
+    private fun newPressurePlateau(t: Long, v: Float): Boolean {
         Log.v(TAG, "New pressure plateau registered ($v at $t, aka ${asSeconds(t)} s)")
 
         val diff = v - lastPressurePlateau.second
         val timeDiff = t - lastPressurePlateau.first
+        lastPressurePlateau = Pair(t, v)
         if (timeDiff < LANDING_PRESSURE_MAX_TIME && diff in LANDING_PRESSURE_DIFF_RANGE) {
             Log.i(TAG, "Landing detected at $t (aka ${asSeconds(t)} s)")
-            setFlyingStatus(false)
+            return true
         }
-        lastPressurePlateau = Pair(t, v)
+        return false
     }
 
     private fun movingAverage(source: Array<Pair<Long, Float>>, ms: Int): Array<Pair<Long, Float>> {

@@ -24,6 +24,7 @@ class HomeFragment : Fragment() {
 
     private var serviceBinder: DetectionService.LocalBinder? = null
     private var job: Job? = null
+    private var sensorFileLoaded = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -41,6 +42,10 @@ class HomeFragment : Fragment() {
             // we must make sure that the service doesn't start if it's already running,
             // and not stopped when it's not running
             if (!checked && serviceBinder != null) {
+                if (sensorFileLoaded) {
+                    val m = homeViewModel.generateFlightStatsMessage(serviceBinder?.flightStats())
+                    displayFlightStats(m)
+                }
                 (activity as MainActivity).stopDetectionService()
             } else if (checked && serviceBinder == null) {
                 (activity as MainActivity).bindDetectionService()
@@ -75,7 +80,8 @@ class HomeFragment : Fragment() {
 
         (activity as MainActivity).sensorFile().observe(viewLifecycleOwner) {
             Log.d(TAG, "Sensor file update")
-            if (it != null) {
+            sensorFileLoaded = it != null
+            if (sensorFileLoaded) {
                 binding.sensorFileLoaded.visibility = View.VISIBLE
                 binding.replayProgress.visibility = View.VISIBLE
                 binding.flightButton.isEnabled = false
@@ -92,6 +98,18 @@ class HomeFragment : Fragment() {
         job?.cancel()
         binding.flyingStatus.text = ""
         binding.latestSensorData.text = ""
+    }
+
+    private fun displayFlightStats(message: String) {
+        if (message.isEmpty()) return
+        activity?.let { a ->
+            AlertDialog.Builder(a).apply {
+                setTitle("Flight stats")
+                setMessage(message)
+                setPositiveButton("Close") { _, _ -> }
+                show()
+            }
+        }
     }
 
     override fun onResume() {

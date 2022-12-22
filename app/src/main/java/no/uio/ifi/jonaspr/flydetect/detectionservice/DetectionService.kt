@@ -30,6 +30,7 @@ class DetectionService : Service() {
         fun flying() = decisionComponent.currentlyFlying()
         fun flyingLiveData() = decisionComponent.flyingLiveData()
         internal fun forceFlight(x: Boolean) = decisionComponent.setFlyingStatus(x)
+        fun flightStats() = decisionComponent.flightStats()
     }
     private val binder = LocalBinder()
 

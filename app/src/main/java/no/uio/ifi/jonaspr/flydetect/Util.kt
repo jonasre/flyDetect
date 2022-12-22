@@ -1,5 +1,6 @@
 package no.uio.ifi.jonaspr.flydetect
 
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 object Util {
@@ -24,4 +25,11 @@ object Util {
 
         return String.format("%02d:%02d:%02d", hours, minutes, seconds)
     }
+
+    // Formats seconds to (+|-)hh:mm:ss
+    fun formatSecondsSigned(duration: Int): String {
+        val prefix = if (duration < 0) "-" else "+"
+        return prefix + formatSeconds(abs(duration))
+    }
+
 }
