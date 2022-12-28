@@ -34,6 +34,8 @@ class MainActivity : AppCompatActivity() {
     private val mSensorFile = MutableLiveData<Uri?>()
     fun sensorFile(): LiveData<Uri?> = mSensorFile
 
+    var markers: Map<String, Int> = mapOf()
+
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName?, service: IBinder?) {
             Log.i(TAG, "DetectionService connected")
@@ -85,7 +87,6 @@ class MainActivity : AppCompatActivity() {
 
     // Binds to DetectionService. The service is started if it's not already running
     fun bindDetectionService() {
-
         val intent = Intent(this, DetectionService::class.java)
         if (!DetectionService.running) {
             // start the service
@@ -120,8 +121,9 @@ class MainActivity : AppCompatActivity() {
         mBinder.postValue(null)
     }
 
-    fun postSensorFile(uri: Uri?) {
+    fun postFileRelated(uri: Uri?, m: Map<String, Int>) {
         mSensorFile.postValue(uri)
+        markers = m
     }
 
     companion object {

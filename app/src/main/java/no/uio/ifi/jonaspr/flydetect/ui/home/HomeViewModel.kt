@@ -7,14 +7,16 @@ class HomeViewModel : ViewModel() {
 
     fun generateFlightStatsMessage(map: Map<String, Int>?): String {
         if (map == null) return ""
-        val takeoffMarker = 0 //TODO
-        val takeoffMarkerMessage = Util.formatSeconds(takeoffMarker)
+        val takeoffMarker = map["takeoff"] ?: 0
+        val takeoffMarkerMessage =
+            if (takeoffMarker != 0) Util.formatSeconds(takeoffMarker) else "N/A"
         val fStart = map["flightStart"]!!
         val tMarkerStartDiff = Util.formatSecondsSigned(fStart - takeoffMarker)
         val fStartDetect = map["flightStartDetect"]!!
         val fStartDetectDiff = Util.formatSecondsSigned(fStartDetect - fStart)
-        val landingMarker = 0 //TODO
-        val landingMarkerMessage = Util.formatSeconds(landingMarker)
+        val landingMarker = map["landing"] ?: 0
+        val landingMarkerMessage =
+            if (landingMarker != 0) Util.formatSeconds(landingMarker) else "N/A"
         val fEnd = map["flightEnd"]!!
         val lMarkerEndDiff = Util.formatSecondsSigned(fEnd - landingMarker)
         val fEndDetect = map["flightEndDetect"]!!
@@ -24,12 +26,14 @@ class HomeViewModel : ViewModel() {
         var fStartMessage = "N/A"; var fStartDetectMessage = "N/A"
         var fEndMessage = "N/A"; var fEndDetectMessage = "N/A"
         if (fStart >= 0) {
-            fStartMessage = "${Util.formatSeconds(fStart)} \n($tMarkerStartDiff from marker)"
+            fStartMessage = "${Util.formatSeconds(fStart)} \n" +
+                    if (takeoffMarker != 0) "($tMarkerStartDiff from marker)" else ""
             fStartDetectMessage = "${Util.formatSeconds(fStartDetect)}\n($fStartDetectDiff from " +
                     "data indicates flight)"
         }
         if (fEnd >= 0) {
-            fEndMessage = "${Util.formatSeconds(fEnd)} \n($lMarkerEndDiff from marker)"
+            fEndMessage = "${Util.formatSeconds(fEnd)} \n" +
+                    if (landingMarker != 0) "($lMarkerEndDiff from marker)" else ""
             fEndDetectMessage = "${Util.formatSeconds(fEndDetect)} \n($fEndDetectDiff from data " +
                     "indicates landing)"
         }

@@ -43,7 +43,9 @@ class HomeFragment : Fragment() {
             // and not stopped when it's not running
             if (!checked && serviceBinder != null) {
                 if (sensorFileLoaded) {
-                    val m = homeViewModel.generateFlightStatsMessage(serviceBinder?.flightStats())
+                    val fs = serviceBinder?.flightStats()
+                    val statsMap = fs?.plus((activity as MainActivity).markers)
+                    val m = homeViewModel.generateFlightStatsMessage(statsMap)
                     displayFlightStats(m)
                 }
                 (activity as MainActivity).stopDetectionService()

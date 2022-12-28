@@ -2,6 +2,7 @@ package no.uio.ifi.jonaspr.flydetect.ui.developer
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -28,6 +29,8 @@ class DeveloperFragment : Fragment() {
 
     private lateinit var filePickerLauncher: ActivityResultLauncher<Intent>
 
+
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -38,6 +41,11 @@ class DeveloperFragment : Fragment() {
 
         _binding = FragmentDeveloperBinding.inflate(inflater, container, false)
         val root: View = binding.root
+
+        val postFileRelated = (activity as MainActivity)::postFileRelated
+        val defaultCallback = { uri: Uri?, markers: Map<String, Int>? ->
+            postFileRelated(uri, markers ?: mapOf())
+        }
 
         filePickerLauncher =
             registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -55,7 +63,8 @@ class DeveloperFragment : Fragment() {
                                     ).show()
                                 }
                             }
-                        }
+                        },
+                        defaultCallback
                     )
                 }
             }
@@ -71,10 +80,6 @@ class DeveloperFragment : Fragment() {
             }
         }
         developerViewModel.apply {
-            sensorFileUri.observe(viewLifecycleOwner) {
-                (activity as MainActivity).postSensorFile(it)
-            }
-
             sensorFileTitle.observe(viewLifecycleOwner) {
                 val replace = if (it != "") it else "N/A"
                 binding.sensorFileTitle.text =
@@ -128,7 +133,9 @@ class DeveloperFragment : Fragment() {
         }
 
         binding.clearButton.setOnClickListener {
-            developerViewModel.fetchSensorFileInfo(requireActivity().contentResolver, null)
+            developerViewModel.fetchSensorFileInfo(
+                requireActivity().contentResolver, null, callback = defaultCallback
+            )
         }
 
         return root

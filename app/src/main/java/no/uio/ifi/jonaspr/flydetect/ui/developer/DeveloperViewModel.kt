@@ -15,7 +15,6 @@ import no.uio.ifi.jonaspr.flydetect.`interface`.Failable
 
 
 class DeveloperViewModel : ViewModel() {
-    private val _sensorFileUri = MutableLiveData<Uri?>()
     private val _sensorFileTitle = MutableLiveData<String>()
     private val _duration = MutableLiveData<String>()
     private val _samples = MutableLiveData<Int>()
@@ -27,7 +26,6 @@ class DeveloperViewModel : ViewModel() {
         value = false
     }
 
-    val sensorFileUri: LiveData<Uri?> = _sensorFileUri
     val sensorFileTitle: LiveData<String> = _sensorFileTitle
     val duration: LiveData<String> = _duration
     val samples: LiveData<Int> = _samples
@@ -50,9 +48,14 @@ class DeveloperViewModel : ViewModel() {
     }
 
     // Get information about the sensor file
-    fun fetchSensorFileInfo(resolver: ContentResolver, uri: Uri?, fail: Failable? = null) {
+    fun fetchSensorFileInfo(
+        resolver: ContentResolver,
+        uri: Uri?,
+        fail: Failable? = null,
+        callback: (uri: Uri?, markers: Map<String, Int>?) -> Unit = { _, _ -> }
+    ) {
         if (uri == null) {
-            _sensorFileUri.postValue(null)
+            callback(null, mapOf())
             resetText()
             return
         }
@@ -76,13 +79,15 @@ class DeveloperViewModel : ViewModel() {
                 val duration = endTime - startTime
 
                 var markersLocal = ""
+                val markersMap = HashMap<String, Int>()
 
                 var i = 2
                 if (lines[i + 1] == "") i++
                 while (lines[++i] != "") {
                     lines[i].split(";").let {
-                        val timestamp = (it[1].toLong()-startTime)/1000
-                        markersLocal += "(${Util.formatSeconds(timestamp.toInt())}) ${it[0]}\n"
+                        val timestamp = ((it[1].toLong()-startTime)/1000).toInt()
+                        markersLocal += "(${Util.formatSeconds(timestamp)}) ${it[0]}\n"
+                        markersMap.put(it[0].lowercase(), timestamp)
                     }
                 }
                 val sensorEvents = lines.subList(i+1, lines.size).sortedBy {
@@ -116,15 +121,12 @@ class DeveloperViewModel : ViewModel() {
                             prevAcc = timestamp
                         }
                     }
-
                 }
 
                 val accRate = calculateRate(acc)
                 val barRate = calculateRate(bar)
 
                 val qualityLocal: Float = (duration.toFloat()-(hole/2))/duration
-
-                //Log.d("dvm", "ar:$accRate, br:$barRate, ")
 
                 _sensorFileTitle.postValue(lines[0])
                 _duration.postValue(Util.formatSeconds((duration/1000).toInt()))
@@ -140,7 +142,7 @@ class DeveloperViewModel : ViewModel() {
 
                 // If this point is reached, then the file is probably ok.
                 // The following line confirms to the rest of the app that the file is ready.
-                _sensorFileUri.postValue(uri)
+                callback(uri, markersMap)
             } catch (e: Exception) {
                 // something went wrong while loading
                 fail?.onFailure()
