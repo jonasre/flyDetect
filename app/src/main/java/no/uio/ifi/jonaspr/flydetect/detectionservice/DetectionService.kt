@@ -30,7 +30,8 @@ class DetectionService : Service() {
         fun flying() = decisionComponent.currentlyFlying()
         fun flyingLiveData() = decisionComponent.flyingLiveData()
         internal fun forceFlight(x: Boolean) = decisionComponent.setFlyingStatus(x)
-        fun flightStats() = decisionComponent.flightStats()
+        fun flightStats() = decisionComponent.flightStats() + (markers ?: mapOf())
+        fun isUsingSensorInjection() = isUsingSensorInjection
     }
     private val binder = LocalBinder()
 
@@ -41,6 +42,9 @@ class DetectionService : Service() {
 
     private var accSamplingFrequency = -1f
     private var barSamplingFrequency = -1f
+
+    private var isUsingSensorInjection = false
+    private var markers: Map<String, Int>? = null
 
     override fun onBind(intent: Intent): IBinder {
         return binder
@@ -55,12 +59,19 @@ class DetectionService : Service() {
 
         // Get sensorFile for sensor injection (optional)
         // intent.getParcelableExtra(key) is deprecated since API level 33
-        val sensorFile: Uri? = if (VERSION.SDK_INT >= 33) {
-            intent.getParcelableExtra("sensorFile", Uri::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra("sensorFile")
+        val sensorFile: Uri?
+        if (VERSION.SDK_INT >= 33) {
+            sensorFile = intent.getParcelableExtra("sensorFile", Uri::class.java)
+            @Suppress("UNCHECKED_CAST")
+            markers = intent.getSerializableExtra("markers", HashMap::class.java)
+                    as Map<String, Int>?
+        } else @Suppress("DEPRECATION") {
+            sensorFile = intent.getParcelableExtra("sensorFile")
+            @Suppress("UNCHECKED_CAST")
+            markers = intent.getSerializableExtra("markers") as Map<String, Int>?
+
         }
+        if (sensorFile != null) isUsingSensorInjection = true
 
         val resample = intent.getBooleanExtra("resampleSensorFile", true)
 

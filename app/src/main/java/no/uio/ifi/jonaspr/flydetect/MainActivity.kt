@@ -34,7 +34,7 @@ class MainActivity : AppCompatActivity() {
     private val mSensorFile = MutableLiveData<Uri?>()
     fun sensorFile(): LiveData<Uri?> = mSensorFile
 
-    var markers: Map<String, Int> = mapOf()
+    private var markers: Map<String, Int> = mapOf()
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName?, service: IBinder?) {
@@ -102,6 +102,7 @@ class MainActivity : AppCompatActivity() {
                     )
                     if (mSensorFile.value != null) {
                         putExtra("sensorFile", mSensorFile.value)
+                        putExtra("markers", markers as HashMap<String, Int>)
                     }
                     putExtra("resampleSensorFile", it.getBoolean("resampleSensorFile", true))
                 })

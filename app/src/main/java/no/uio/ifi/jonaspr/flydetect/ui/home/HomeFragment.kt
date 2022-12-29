@@ -41,15 +41,14 @@ class HomeFragment : Fragment() {
             // Since the switch is might be toggled automatically when the app starts,
             // we must make sure that the service doesn't start if it's already running,
             // and not stopped when it's not running
-            if (!checked && serviceBinder != null) {
-                if (sensorFileLoaded) {
-                    val fs = serviceBinder?.flightStats()
-                    val statsMap = fs?.plus((activity as MainActivity).markers)
-                    val m = homeViewModel.generateFlightStatsMessage(statsMap)
+            val binder = serviceBinder
+            if (!checked && binder != null) {
+                if (binder.isUsingSensorInjection()) {
+                    val m = homeViewModel.generateFlightStatsMessage(binder.flightStats())
                     displayFlightStats(m)
                 }
                 (activity as MainActivity).stopDetectionService()
-            } else if (checked && serviceBinder == null) {
+            } else if (checked && binder == null) {
                 (activity as MainActivity).bindDetectionService()
             }
         }
@@ -83,15 +82,7 @@ class HomeFragment : Fragment() {
         (activity as MainActivity).sensorFile().observe(viewLifecycleOwner) {
             Log.d(TAG, "Sensor file update")
             sensorFileLoaded = it != null
-            if (sensorFileLoaded) {
-                binding.sensorFileLoaded.visibility = View.VISIBLE
-                binding.replayProgress.visibility = View.VISIBLE
-                binding.flightButton.isEnabled = false
-            } else {
-                binding.sensorFileLoaded.visibility = View.GONE
-                binding.replayProgress.visibility = View.GONE
-                binding.flightButton.isEnabled = true
-            }
+            showReplayIfAppropriate()
         }
         return root
     }
@@ -100,6 +91,22 @@ class HomeFragment : Fragment() {
         job?.cancel()
         binding.flyingStatus.text = ""
         binding.latestSensorData.text = ""
+    }
+
+    private fun showReplayIfAppropriate() {
+        val binder = serviceBinder
+        if (
+            (sensorFileLoaded && binder == null) ||
+            (binder != null && binder.isUsingSensorInjection())
+        ) {
+            binding.sensorFileLoaded.visibility = View.VISIBLE
+            binding.replayProgress.visibility = View.VISIBLE
+            binding.flightButton.isEnabled = false
+        } else {
+            binding.sensorFileLoaded.visibility = View.GONE
+            binding.replayProgress.visibility = View.GONE
+            binding.flightButton.isEnabled = true
+        }
     }
 
     private fun displayFlightStats(message: String) {
@@ -119,6 +126,7 @@ class HomeFragment : Fragment() {
         (activity as MainActivity).binder().observe(viewLifecycleOwner) {
             // This code is run whenever the service is connected or disconnected
             serviceBinder = it
+            showReplayIfAppropriate()
             if (it != null) {
                 // Checks the switch when the service is connected, necessary when starting the app
                 // while the service is already running
