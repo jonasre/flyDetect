@@ -137,12 +137,14 @@ class HomeFragment : Fragment() {
                 job = CoroutineScope(Dispatchers.Main).launch {
                     while (true) {
                         try {
-                            val flying = it.flying()
-                            binding.latestSensorData.text = if (flying)
-                                String.format(getString(R.string.pressure_display), it.latestBarSample())
-                            else
-                                String.format(getString(R.string.acceleration_display), it.latestAccSample())
-                            binding.replayProgress.progress = serviceBinder?.replayProgress()!!
+                            serviceBinder?.let { sb ->
+                                val flying = it.flying()
+                                binding.latestSensorData.text = if (flying)
+                                    String.format(getString(R.string.pressure_display), it.latestBarSample())
+                                else
+                                    String.format(getString(R.string.acceleration_display), it.latestAccSample())
+                                binding.replayProgress.progress = sb.replayProgress()
+                            }
                             delay(100)
                         } catch (e: CancellationException) {
                             // This block is to avoid catching JobCancellationException in the next
