@@ -7,7 +7,6 @@ import android.hardware.Sensor
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.net.Uri
-import android.os.Binder
 import android.os.Build.VERSION
 import android.os.IBinder
 import android.os.SystemClock
@@ -22,29 +21,19 @@ import no.uio.ifi.jonaspr.flydetect.R
 import no.uio.ifi.jonaspr.flydetect.Util
 
 class DetectionService : Service() {
-    inner class LocalBinder : Binder() {
-        fun stop() = this@DetectionService.stop()
-        fun latestAccSample() = accListener.latest
-        fun latestBarSample() = barListener.latest
-        fun replayProgress() = sensorManager?.getReplayProgress() ?: 0
-        fun flying() = decisionComponent.currentlyFlying()
-        fun flyingLiveData() = decisionComponent.flyingLiveData()
-        internal fun forceFlight(x: Boolean) = decisionComponent.setFlyingStatus(x)
-        fun flightStats() = decisionComponent.flightStats() + (markers ?: mapOf())
-        fun isUsingSensorInjection() = isUsingSensorInjection
-    }
-    private val binder = LocalBinder()
-
-    private var sensorManager: SensorManagerInterface? = null
-    private lateinit var accListener: AccelerometerListener
-    private lateinit var barListener: BarometerListener
-    private lateinit var decisionComponent: DecisionComponent
+    private val binder = DetectionServiceBinder(this)
+    var sensorManager: SensorManagerInterface? = null
+    lateinit var accListener: AccelerometerListener
+    lateinit var barListener: BarometerListener
+    lateinit var decisionComponent: DecisionComponent
+    private var markers: Map<String, Int>? = null
 
     private var accSamplingFrequency = -1f
     private var barSamplingFrequency = -1f
 
-    private var isUsingSensorInjection = false
-    private var markers: Map<String, Int>? = null
+    var isUsingSensorInjection = false
+
+    fun getStats() = decisionComponent.flightStats() + (markers ?: mapOf())
 
     override fun onBind(intent: Intent): IBinder {
         return binder

@@ -22,14 +22,15 @@ import androidx.preference.PreferenceManager
 import com.google.android.material.navigation.NavigationView
 import no.uio.ifi.jonaspr.flydetect.databinding.ActivityMainBinding
 import no.uio.ifi.jonaspr.flydetect.detectionservice.DetectionService
+import no.uio.ifi.jonaspr.flydetect.detectionservice.DetectionServiceBinder
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var appBarConfiguration: AppBarConfiguration
     private lateinit var binding: ActivityMainBinding
 
-    private val mBinder = MutableLiveData<DetectionService.LocalBinder?>()
-    fun binder(): LiveData<DetectionService.LocalBinder?> = mBinder
+    private val mBinder = MutableLiveData<DetectionServiceBinder?>()
+    fun binder(): LiveData<DetectionServiceBinder?> = mBinder
 
     private val mSensorFile = MutableLiveData<Uri?>()
     fun sensorFile(): LiveData<Uri?> = mSensorFile
@@ -39,7 +40,7 @@ class MainActivity : AppCompatActivity() {
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName?, service: IBinder?) {
             Log.i(TAG, "DetectionService connected")
-            val binder = service as DetectionService.LocalBinder
+            val binder = service as DetectionServiceBinder
             mBinder.value = binder
         }
 
@@ -118,6 +119,7 @@ class MainActivity : AppCompatActivity() {
     // Stops DetectionService and unbinds from it
     fun stopDetectionService() {
         mBinder.value?.stop()
+        Log.i(TAG, "Unbinding from service")
         unbindService(connection)
         mBinder.postValue(null)
     }

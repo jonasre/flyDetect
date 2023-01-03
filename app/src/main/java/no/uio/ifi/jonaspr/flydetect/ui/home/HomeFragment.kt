@@ -12,7 +12,7 @@ import kotlinx.coroutines.*
 import no.uio.ifi.jonaspr.flydetect.MainActivity
 import no.uio.ifi.jonaspr.flydetect.R
 import no.uio.ifi.jonaspr.flydetect.databinding.FragmentHomeBinding
-import no.uio.ifi.jonaspr.flydetect.detectionservice.DetectionService
+import no.uio.ifi.jonaspr.flydetect.detectionservice.DetectionServiceBinder
 
 class HomeFragment : Fragment() {
 
@@ -22,7 +22,7 @@ class HomeFragment : Fragment() {
     // onDestroyView.
     private val binding get() = _binding!!
 
-    private var serviceBinder: DetectionService.LocalBinder? = null
+    private var serviceBinder: DetectionServiceBinder? = null
     private var job: Job? = null
     private var sensorFileLoaded = false
 
