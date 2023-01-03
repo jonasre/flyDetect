@@ -482,21 +482,21 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
         private const val ACC_WALK_MIN_TIME = 12_000_000_000 //nanoseconds (ns)
 
         // Acceleration must be within this range to qualify as takeoff roll
-        private val TAKEOFF_ROLL_ACC_RANGE = 9.95..10.3 // m/s^2
+        private val TAKEOFF_ROLL_ACC_RANGE = 9.95..10.42 // m/s^2
 
         // Acceleration must be within TAKEOFF_ROLL_ACC_RANGE for this amount of time to qualify as
         // takeoff roll
         private const val TAKEOFF_ROLL_TIME_MIN = 20_000_000_000 //nanoseconds (ns)
 
         // Acceleration must be within this range to qualify as liftoff
-        private val LIFTOFF_ACC_RANGE = 10.8..11.6 // m/s^2
+        private val LIFTOFF_ACC_RANGE = 10.6..11.6 // m/s^2
 
         // Acceleration must be within LIFTOFF_ACC_RANGE for this amount of time to qualify as
         // liftoff
         private const val LIFTOFF_TIME_MIN = 5_000_000_000 //nanoseconds (ns)
 
         // Liftoff must be detected before this time has passed since takeoff roll was detected
-        private const val ROLL_LIFTOFF_MAX_DELAY = 26_000_000_000 //nanoseconds (ns)
+        private const val ROLL_LIFTOFF_MAX_DELAY = 33_000_000_000 //nanoseconds (ns)
 
         // Liftoff cannot be detected without at least this many sensor samples
         private const val MIN_EVENTS_LIFTOFF = (LIFTOFF_TIME_MIN/1_000_000_000) * 5
@@ -522,7 +522,7 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
 
         // Variance must be below STABLE_PRESSURE_THRESHOLD for this amount of time to qualify as
         // stable
-        private const val STABLE_PRESSURE_MIN_TIME = 10_000_000_000 //nanoseconds (ns)
+        private const val STABLE_PRESSURE_MIN_TIME = 8_700_000_000 //nanoseconds (ns)
 
         // Difference from last stable pressure value must be at least this to qualify as a new
         // plateau
