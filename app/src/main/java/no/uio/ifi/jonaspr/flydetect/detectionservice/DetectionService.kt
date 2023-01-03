@@ -143,7 +143,7 @@ class DetectionService : Service() {
                 listener,
                 getDefaultSensor(type),
                 Util.convertHzMicroseconds(samplingFrequency),
-                0
+                30_000_000
             )
         }
     }
