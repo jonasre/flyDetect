@@ -102,14 +102,14 @@ class DetectionService : Service() {
                 NotificationChannel(
                     notificationChannelID,
                     "DetectionService",
-                    NotificationManager.IMPORTANCE_DEFAULT
+                    NotificationManager.IMPORTANCE_LOW
                 )
             )
 
         val notification: Notification = Notification.Builder(this, notificationChannelID)
             .setOngoing(true)
             .setContentTitle("flyDetect is active")
-            .setContentText("in the background")
+            .setContentText("Tap to open")
             .setContentIntent(
                 Intent(this, MainActivity::class.java).let {
                     PendingIntent.getActivity(this, 0,
