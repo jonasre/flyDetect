@@ -26,11 +26,26 @@ class FlightHistoryFragment : Fragment() {
         val root: View = binding.root
 
         val flights = Storage.getFlights(root.context)
-        binding.flightHistoryList.adapter = FlightHistoryListAdapter(flights)
+        val adapter = FlightHistoryListAdapter(flights, ::showMessageIfAppropriate)
+
+        binding.flightHistoryList.adapter = adapter
         binding.flightHistoryList.addItemDecoration(
             DividerItemDecoration(root.context, DividerItemDecoration.VERTICAL)
         )
 
+        showMessageIfAppropriate(flights.isEmpty())
+
         return root
+    }
+
+    private fun showMessageIfAppropriate(emptyFlights: Boolean) {
+        if (emptyFlights) {
+            // Show message if no flights are registered
+            binding.flightHistoryList.visibility = View.INVISIBLE
+            binding.noFlightsMessage.visibility = View.VISIBLE
+        } else {
+            binding.flightHistoryList.visibility = View.VISIBLE
+            binding.noFlightsMessage.visibility = View.INVISIBLE
+        }
     }
 }

@@ -14,8 +14,7 @@ import no.uio.ifi.jonaspr.flydetect.detectionservice.Flight
 import java.text.SimpleDateFormat
 import java.util.*
 
-
-class FlightHistoryListAdapter(flightSet: Set<Flight>) :
+class FlightHistoryListAdapter(flightSet: Set<Flight>, private val callback: (x: Boolean) -> Unit) :
     RecyclerView.Adapter<FlightHistoryListAdapter.ViewHolder>() {
     private var flightList = flightSet.sortedBy { it.start }.reversed().toMutableList()
     private val hourMinuteFormatter = SimpleDateFormat("HH:mm", Locale.ENGLISH)
@@ -65,6 +64,7 @@ class FlightHistoryListAdapter(flightSet: Set<Flight>) :
                             }
                             flightList.remove(flight)
                             notifyItemRemoved(layoutPosition)
+                            this@FlightHistoryListAdapter.callback(flightList.isEmpty())
                         }
                         setNegativeButton(context.getString(R.string.no)) { _, _ -> }
                         show()

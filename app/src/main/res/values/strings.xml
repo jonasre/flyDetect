@@ -60,4 +60,5 @@
         Are you sure you want to force the flight status to %1$s? This can cause problems with the
         detection.
     </string>
+    <string name="no_flights_registered">No flights registered</string>
 </resources>
