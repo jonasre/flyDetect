@@ -63,14 +63,15 @@ class HomeFragment : Fragment() {
                 val newState = if (status) "NOT FLYING" else "FLYING"
                 activity?.let { a ->
                     AlertDialog.Builder(a).apply {
-                        setTitle("Confirmation")
-                        setMessage("Are you sure you want to force the flight status to " +
-                                "$newState? This can cause problems with the detection.")
-                        setPositiveButton("Yes") { _, _ ->
+                        setTitle(getString(R.string.confirmation))
+                        setMessage(
+                            String.format(getString(R.string.force_flight_message), newState)
+                        )
+                        setPositiveButton(getString(R.string.yes)) { _, _ ->
                             Log.d(TAG, "Dialog OK")
                             it.forceFlight(!status)
                         }
-                        setNegativeButton("No") { _, _ ->
+                        setNegativeButton(getString(R.string.no)) { _, _ ->
                             Log.d(TAG, "Dialog CANCEL")
                         }
                         show()
