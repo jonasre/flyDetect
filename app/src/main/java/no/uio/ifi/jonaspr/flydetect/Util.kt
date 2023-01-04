@@ -1,5 +1,7 @@
 package no.uio.ifi.jonaspr.flydetect
 
+import java.text.SimpleDateFormat
+import java.util.*
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -30,6 +32,18 @@ object Util {
     fun formatSecondsSigned(duration: Int): String {
         val prefix = if (duration < 0) "-" else "+"
         return prefix + formatSeconds(abs(duration))
+    }
+
+    fun dateFormatTh(time: Long): String {
+        val cal = Calendar.getInstance()
+        cal.timeInMillis = time
+        val suffix = when (cal.get(Calendar.DAY_OF_MONTH) % 10) {
+            1 -> "st"
+            2 -> "nd"
+            3 -> "rd"
+            else -> "th"
+        }
+        return SimpleDateFormat("MMMM d'$suffix' yyyy", Locale.ENGLISH).format(Date(time))
     }
 
 }

@@ -13,6 +13,10 @@
             android:id="@+id/nav_developer"
             android:icon="@drawable/ic_baseline_developer_mode_24"
             android:title="@string/menu_developer" />
+        <item
+            android:id="@+id/nav_flight_history"
+            android:icon="@drawable/ic_baseline_history_24"
+            android:title="@string/flight_history" />
     </group>
     <group android:checkableBehavior="none"
         android:id="@+id/menu_group_settings">

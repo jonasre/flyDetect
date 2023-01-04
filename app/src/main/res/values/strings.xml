@@ -39,4 +39,16 @@
     <string name="forceFlightFalse">Force stop flight</string>
     <string name="forceFlightTrue">Force flight</string>
     <string name="flyingStateFalse">Not flying</string>
+
+    <!-- Flight history related -->
+    <string name="flight_history">Flight history</string>
+    <string name="start_time">Start time: %1$s</string>
+    <string name="flight_duration">Duration: %1$s</string>
+    <string name="forced_start">Forced start</string>
+    <string name="forced_end">Forced end</string>
+    <string name="delete_flight_confirmation">Are you sure you want to delete this flight? This action is irreversible.</string>
+    <string name="confirmation">Confirmation</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="flight_delete_error">Something went wrong, unable to delete flight</string>
 </resources>

@@ -100,6 +100,8 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
         flying = x
         flyingLive.postValue(x)
 
+        val forced = t1 < 0
+        service.notifyFlightStatusChange(flying, forced)
 
         // Register/unregister listeners accordingly
         if (flying) {
@@ -113,7 +115,7 @@ class DecisionComponent(private val service: DetectionService, accFrequency: Flo
         }
 
         // Stats variables
-        if (t1 < 0) return
+        if (forced) return
         if (flying) {
             flightCount++
             flightStart = asSeconds(t1)

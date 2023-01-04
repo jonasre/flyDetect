@@ -15,10 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import no.uio.ifi.jonaspr.flydetect.BuildConfig
-import no.uio.ifi.jonaspr.flydetect.MainActivity
-import no.uio.ifi.jonaspr.flydetect.R
-import no.uio.ifi.jonaspr.flydetect.Util
+import no.uio.ifi.jonaspr.flydetect.*
 
 class DetectionService : Service() {
     private val binder = DetectionServiceBinder(this)
@@ -27,6 +24,7 @@ class DetectionService : Service() {
     lateinit var barListener: BarometerListener
     lateinit var decisionComponent: DecisionComponent
     private var markers: Map<String, Int>? = null
+    private var currentFlight: Flight? = null
 
     private var accSamplingFrequency = -1f
     private var barSamplingFrequency = -1f
@@ -167,6 +165,20 @@ class DetectionService : Service() {
 
     override fun onDestroy() {
         running = false
+    }
+
+    fun notifyFlightStatusChange(flying: Boolean, forced: Boolean) {
+        if (isUsingSensorInjection) return
+        if (flying) {
+            // This is the start of a new flight
+            currentFlight = Flight(System.currentTimeMillis())
+            currentFlight!!.forcedStart = forced
+        } else {
+            // This is the end of a flight
+            currentFlight!!.end = System.currentTimeMillis()
+            currentFlight!!.forcedEnd = forced
+            Storage.saveFlight(applicationContext, currentFlight!!)
+        }
     }
 
     companion object {
