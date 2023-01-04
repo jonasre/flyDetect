@@ -117,7 +117,7 @@ class DetectionService : Service() {
                     )
                 }
             )
-            .setSmallIcon(R.drawable.ic_launcher_foreground) //TODO: update at some point
+            .setSmallIcon(R.drawable.ic_flydetect_white)
             .build()
 
         val notificationID = 34
