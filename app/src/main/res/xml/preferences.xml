@@ -7,20 +7,20 @@
             android:title="Accelerometer sampling frequency"
             android:entries="@array/acc_sampling_frequency_entries"
             android:entryValues="@array/acc_sampling_frequency_values"
-            android:defaultValue="10.0"
+            android:defaultValue="60.0"
             app:useSimpleSummaryProvider="true"/>
         <ListPreference
             android:key="bar_sampling_frequency"
             android:title="Barometer sampling frequency"
             android:entries="@array/bar_sampling_frequency_entries"
             android:entryValues="@array/bar_sampling_frequency_values"
-            android:defaultValue="1.0"
+            android:defaultValue="4.0"
             app:useSimpleSummaryProvider="true"/>
         <SwitchPreferenceCompat
             android:key="resampleSensorFile"
             android:title="Resample sensor file"
             android:summary="When replaying recorded sensor data from a file, the data will be
                 resampled to match the specified frequencies"
-            android:defaultValue="true"/>
+            android:defaultValue="false"/>
     </PreferenceCategory>
 </PreferenceScreen>
