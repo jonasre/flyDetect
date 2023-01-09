@@ -7,14 +7,30 @@ import androidx.lifecycle.MutableLiveData
 import kotlin.math.abs
 import kotlin.math.max
 
-class DecisionComponent(private val service: DetectionService, accFrequency: Float, barFrequency: Float) {
+class DecisionComponent(
+    private val service: DetectionService,
+    accFrequency: Float,
+    barFrequency: Float
+) {
     private var flying = false
     private val flyingLive = MutableLiveData(false)
     private var roll: Boolean = false
     private var rollTimestamp: Long = 0L
     private var accOffset = 0f
-    private val accBuffer = SensorDataRingBuffer((accFrequency * SECONDS_OF_ACC).toInt())
-    private val barBuffer = SensorDataRingBuffer((barFrequency * SECONDS_OF_BAR).toInt())
+    private val accBuffer: SensorDataRingBuffer
+    private val barBuffer: SensorDataRingBuffer
+
+    init {
+        // Set appropriate buffer size. This is to avoid buffer overflow when using a sensor file
+        // with a higher sampling rate than what is specified in the settings
+        val sensorInjection = service.isUsingSensorInjection
+        val accSize =
+            if (sensorInjection) 100 * SECONDS_OF_ACC else (accFrequency * SECONDS_OF_ACC).toInt()
+        val barSize =
+            if (sensorInjection) 4 * SECONDS_OF_BAR else (barFrequency * SECONDS_OF_BAR).toInt()
+        accBuffer = SensorDataRingBuffer(accSize)
+        barBuffer = SensorDataRingBuffer(barSize)
+    }
 
     private var flightStart = -1
     private var flightStartDetect = -1
