@@ -229,7 +229,7 @@ class DecisionComponent(
 
                     if (liftoffEndTime == -1L) {
                         // If latestTimeLiftoff is reached without finding a value in liftoff range
-                        // In other words - no data was in liftoff range withing the time limit
+                        // In other words - no data was in liftoff range within the time limit
                         // or there is a gap in the data
                         if (i < ma.size && ma[i].first >= latestTimeLiftoff) {
                             Log.v(TAG, "(STAGE 1) No liftoff detected, takeoff roll was " +
@@ -345,10 +345,15 @@ class DecisionComponent(
         nextBarCheckTime += timeUntilNextCheck
     }
 
+    /**
+     * Returns index in the provided moving variance array where acceleration is stable. Returns -1
+     * if no such index is found
+     */
     private fun accStableIndex(mv: Array<Pair<Long, Float>>): Int {
         return filterThresholdMin(mv, STABLE_ACC_VARIANCE_THRESHOLD, STABLE_ACC_MIN_TIME)
     }
 
+    // Returns true/false if the provided moving variance is too high to indicate flying or not
     private fun noiseFilter(mv: Array<Pair<Long, Float>>): Boolean {
         return filterThresholdMin(
             mv,
@@ -358,15 +363,19 @@ class DecisionComponent(
         ) >= 0
     }
 
+    /**
+     * Utility function. Return index in data where values have been above/below threshold (decided
+     * by successIfBelowThreshold) for a duration of at least minTime.
+     */
     private fun filterThresholdMin(
         data: Array<Pair<Long, Float>>,
         threshold: Float,
         minTime: Long,
-        aboveThreshold: Boolean = true
+        successIfBelowThreshold: Boolean = true
     ): Int {
         var i = 0
         var startTime = -1L
-        val m = if (aboveThreshold) 1 else -1
+        val m = if (successIfBelowThreshold) 1 else -1
         val th = threshold*m
         while (i < data.size) {
             val (timestamp, value) = data[i]
