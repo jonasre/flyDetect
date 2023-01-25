@@ -90,7 +90,7 @@ class DetectionService : Service() {
         }
 
         startForeground()
-        return START_NOT_STICKY //Is there a better alternative?
+        return START_REDELIVER_INTENT
     }
 
     private fun startForeground() {
