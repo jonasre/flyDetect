@@ -499,7 +499,7 @@ class DecisionComponent(
         private const val ACC_MOVING_VAR_WINDOW_SIZE = 10_000 //milliseconds (ms)
 
         // Variance must be below this value to consider acceleration stable
-        private const val STABLE_ACC_VARIANCE_THRESHOLD = 0.004f
+        private const val STABLE_ACC_VARIANCE_THRESHOLD = 0.005f
 
         private const val STABLE_ACC_MIN_TIME = 10_000_000_000 //nanoseconds (ns)
 
@@ -516,7 +516,7 @@ class DecisionComponent(
         private const val TAKEOFF_ROLL_TIME_MIN = 20_000_000_000 //nanoseconds (ns)
 
         // Acceleration must be within this range to qualify as liftoff
-        private val LIFTOFF_ACC_RANGE = 10.6..11.6 // m/s^2
+        private val LIFTOFF_ACC_RANGE = 10.6..12.0 // m/s^2
 
         // Acceleration must be within LIFTOFF_ACC_RANGE for this amount of time to qualify as
         // liftoff
