@@ -58,6 +58,7 @@ class CustomSensorManager(
         val type = listeners[listener]
         listeners.remove(listener)
         listenerByTypeMap.remove(type)
+        sensorMap.remove(type)
         if (listeners.isEmpty()) {
             stop = true
         }
@@ -141,14 +142,23 @@ class CustomSensorManager(
         while (currentIndex < sensorEventStrings.size && !stop) {
             // Create a SensorEvent object for this line
             val cur = newSensorEvent(sensorEventStrings[currentIndex++])
+            // Skip if the sensor for this event isn't registered
+            if (cur.sensor == null) continue
             // Load the previous SensorEvent related to this one (cur), and save cur as previous
             // for the next iteration
-            if (cur.sensor == null) continue
             val prev: SensorEvent? = lastEventMap[cur.sensor.type]
             lastEventMap[cur.sensor.type] = cur
 
             // If this is the first event for this sensor type, or if there is a hole in the data
-            if (prev == null || cur.timestamp - prev.timestamp > 1_000_000_000) {
+            if (prev == null ||
+                cur.timestamp - prev.timestamp > DATA_GAP_THRESHOLDS[cur.sensor.type]!!
+            ) {
+                val sensor = when (cur.sensor.type) {
+                    Sensor.TYPE_ACCELEROMETER -> "accelerometer"
+                    Sensor.TYPE_PRESSURE -> "barometer"
+                    else -> "unknown sensor"
+                }
+                Log.v(TAG, "First event or gap in data for $sensor")
                 // Send the SensorEvent to the listener
                 sendSensorEvent(cur)
                 // Update when next SensorEvent should be inserted
@@ -167,6 +177,10 @@ class CustomSensorManager(
         }
     }
 
+    /**
+     * Creates a new SensorEvent between two other events, at the specified timestamp. Performed
+     * using linear interpolation.
+     */
     private fun newSensorEventAt(
         timestamp: Long,
         event1: SensorEvent,
@@ -216,5 +230,9 @@ class CustomSensorManager(
 
     companion object {
         private const val TAG = "CSM"
+        private val DATA_GAP_THRESHOLDS = mapOf(
+            Sensor.TYPE_ACCELEROMETER to 50_000_000L,
+            Sensor.TYPE_PRESSURE to 1_000_000_000L
+        )
     }
 }
