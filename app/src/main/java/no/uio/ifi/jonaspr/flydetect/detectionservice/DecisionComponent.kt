@@ -69,9 +69,9 @@ class DecisionComponent(
             // If the time difference between the newest event and the one before it is greater
             // than ACC_MAX_DELAY, check the buffer before adding the new event
             if (event.first - it.first > ACC_MAX_DELAY) {
-                checkAcc()
                 Log.d(TAG, "[acc] Gap in data or rogue event at ${event.first} " +
                         "(aka ${asSeconds(event.first)} s)")
+                checkAcc()
             }
         }
         accBuffer.insert(event) // Insert the new event
@@ -87,9 +87,9 @@ class DecisionComponent(
             // If the time difference between the newest event and the one before it is greater
             // than BAR_MAX_DELAY, check the buffer before adding the new event
             if (event.first - it.first > BAR_MAX_DELAY) {
-                checkBar()
                 Log.d(TAG, "[bar] Gap in data or rogue event at ${event.first} " +
                         "(aka ${asSeconds(event.first)} s)")
+                checkBar()
             }
         }
         barBuffer.insert(event) // Insert the new event
