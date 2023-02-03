@@ -106,6 +106,10 @@ class MainActivity : AppCompatActivity() {
                         putExtra("markers", markers as HashMap<String, Int>)
                     }
                     putExtra("resampleSensorFile", it.getBoolean("resampleSensorFile", true))
+                    putExtra(
+                        "landingDetectionMethod",
+                        it.getString("landing_detection_method", "")
+                    )
                 })
             }
         }
