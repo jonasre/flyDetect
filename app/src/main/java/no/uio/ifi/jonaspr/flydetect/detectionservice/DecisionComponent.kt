@@ -10,7 +10,8 @@ import kotlin.math.max
 class DecisionComponent(
     private val service: DetectionService,
     accFrequency: Float,
-    barFrequency: Float
+    barFrequency: Float,
+    landingDetectionMethod: String
 ) {
     private var flying = false
     private val flyingLive = MutableLiveData(false)
@@ -169,7 +170,7 @@ class DecisionComponent(
 
         // Find acceleration offset
         val stableIndex = accStableIndex(mv)
-        if (stableIndex != -1) {
+        if (stableIndex >= 0) {
             accOffset = GRAVITY_ACC - ma[stableIndex].second
             Log.d(TAG, "accOffset now $accOffset (at ${asSeconds(ma[stableIndex].first)} s)")
         }
@@ -292,57 +293,83 @@ class DecisionComponent(
     private fun checkBar() {
         val window = barBuffer.getLatest(nextCheckWindowBar)
         val average = movingAverage(window, BAR_MOVING_AVG_WINDOW_SIZE)
-        val variance = movingVariance(average, BAR_MOVING_VAR_WINDOW_SIZE)
         var timeUntilNextCheck = DEFAULT_BAR_CHECK_INTERVAL
 
         var i = 0
-        while (i < variance.size && flying) {
+        while (i < average.size && flying) {
             // Loop until end of array or until pressure has left its stable level
             while (
-                i < variance.size &&
+                i < average.size &&
                 abs(lastPressurePlateau.second - average[i].second) <
                     STABLE_PRESSURE_MIN_DIFF
             ) i++
-            if (i >= variance.size) break // Stop if end of array was reached
+            if (i >= average.size) break // Stop if end of array was reached
 
-            var stableStartTime = 0L
-            // Loop until end of array or until first pressure under stable threshold is reached
-            while (i < variance.size) {
-                if (variance[i].second < STABLE_PRESSURE_THRESHOLD) {
-                    stableStartTime = variance[i].first
+            when (val plateauIndex = detectPressurePlateauVariance(average, i)) {
+                -2 -> {
+                    // End of data reached when pressure could be stable, schedule next check sooner
+                    Log.v(TAG, "End of data was reached while pressure could be stable, " +
+                            "scheduling next check sooner (time is " +
+                            "${average[average.lastIndex].first} aka " +
+                            "${asSeconds(average[average.lastIndex].first)}s)")
+                    timeUntilNextCheck /= 2
                     break
                 }
-                i++
-            }
-
-            if (i >= variance.size) break
-
-            // Loop until end of array or as long as variance is below stable threshold
-            // Stop if variance is below stable threshold long enough to consider pressure as stable
-            while (i < variance.size && variance[i].second < STABLE_PRESSURE_THRESHOLD) {
-                if (stableStartTime + STABLE_PRESSURE_MIN_TIME <= variance[i].first) {
-                    // Stable pressure detected
-                    val landing = newPressurePlateau(variance[i].first, average[i].second)
-                    if (landing)
+                -1 -> {
+                    // Pressure is not stable
+                    break
+                }
+                else -> {
+                    // Stable pressure was found, register it at check if it was a landing
+                    val landing = newPressurePlateau(
+                        average[plateauIndex].first,
+                        average[plateauIndex].second
+                    )
+                    if (landing) {
                         // Set flying status false if pressure indicates landing
-                        setFlyingStatus(false, variance[i].first, window[window.lastIndex].first)
-                    if (variance[i].first != average[i].first)
-                        throw Exception("Timestamps in moving variance and window do not match")
-                    break
+                        setFlyingStatus(
+                            false,
+                            average[plateauIndex].first,
+                            window[window.lastIndex].first
+                        )
+                    }
+                    i = plateauIndex
                 }
-                i++
-            }
-
-            if (i >= variance.size){
-                // End of array was reached while checking variance, schedule next check sooner
-                Log.v(TAG, "End of array was reached while checking variance, " +
-                        "scheduling next check sooner (time is ${variance[i-1].first} aka " +
-                        "${asSeconds(variance[i-1].first)}s)")
-                timeUntilNextCheck /= 2
-                break
             }
         }
         nextBarCheckTime += timeUntilNextCheck
+    }
+
+    /**
+     * Looks for a pressure plateau, i.e., where pressure is stable, using moving variance. The
+     * moving variance is calculated from [movingAverage].
+     *
+     * @return
+     * The index of the pressure plateau in [movingAverage], if found. Index calculated with
+     * [startIndex].
+     *
+     * -2 if pressure might be stable at the end of [movingAverage], but we need more data.
+     *
+     * -1 if pressure is not stable.
+     */
+    private fun detectPressurePlateauVariance(
+        movingAverage: Array<Pair<Long, Float>>,
+        startIndex: Int
+    ): Int {
+        val variance = movingVariance(
+            movingAverage.copyOfRange(startIndex, movingAverage.size),
+            BAR_MOVING_VAR_WINDOW_SIZE
+        )
+        val ret = filterThresholdMin(variance, STABLE_PRESSURE_THRESHOLD, STABLE_PRESSURE_MIN_TIME)
+        if (ret >= 0) return ret + startIndex
+        return ret
+    }
+
+    /**
+     * Looks for a pressure plateau, i.e., where pressure is stable, using derivative.
+     */
+    private fun detectPressurePlateauDerivative() {
+
     }
 
     /**
@@ -364,8 +391,16 @@ class DecisionComponent(
     }
 
     /**
-     * Utility function. Return index in data where values have been above/below threshold (decided
-     * by successIfBelowThreshold) for a duration of at least minTime.
+     * Utility function. Find index in [data] where values have been above/below [threshold]
+     * (decided by [successIfBelowThreshold]) for a duration of at least [minTime].
+     *
+     * @return
+     * The index where [data] was on the correct side of the [threshold] for the specified
+     * [minTime], if it happens.
+     *
+     * -2 if [data] was on the correct side of the [threshold] but we ran out of data
+     *
+     * -1 if [data] was not on the correct side of the [threshold] and we ran out of data
      */
     private fun filterThresholdMin(
         data: Array<Pair<Long, Float>>,
@@ -389,6 +424,10 @@ class DecisionComponent(
                 return i - 1
             }
         }
+        // The data was on the correct side of the threshold when we ran out of data
+        if (startTime >= 0) return -2
+        // The data was not on the correct side of the threshold long enough, neither was it on the
+        // correct side when we ran out of data
         return -1
     }
 

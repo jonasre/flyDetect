@@ -44,6 +44,8 @@ class DetectionService : Service() {
         accSamplingFrequency = intent!!.getFloatExtra("accSamplingFrequency", -1f)
         barSamplingFrequency = intent.getFloatExtra("barSamplingFrequency", -1f)
 
+        val landingDetectionMethod = intent.getStringExtra("landingDetectionMethod")!!
+
         // Get sensorFile for sensor injection (optional)
         // intent.getParcelableExtra(key) is deprecated since API level 33
         val sensorFile: Uri?
@@ -62,8 +64,12 @@ class DetectionService : Service() {
 
         val resample = intent.getBooleanExtra("resampleSensorFile", true)
 
-        decisionComponent =
-            DecisionComponent(this, accSamplingFrequency, barSamplingFrequency)
+        decisionComponent = DecisionComponent(
+            this,
+            accSamplingFrequency,
+            barSamplingFrequency,
+            landingDetectionMethod
+        )
         accListener = AccelerometerListener(decisionComponent)
         barListener = BarometerListener(decisionComponent)
 
