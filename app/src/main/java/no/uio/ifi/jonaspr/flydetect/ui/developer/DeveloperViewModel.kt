@@ -40,11 +40,12 @@ class DeveloperViewModel : ViewModel() {
     }
 
     /* Gets the filename from a Uri */
-    fun fileName(resolver: ContentResolver, uri: Uri): String? {
-        resolver.query(uri, null, null, null, null)!!.apply {
+    fun fileName(resolver: ContentResolver, uri: Uri): String {
+        resolver.query(uri, null, null, null, null)?.apply {
             return getString(getColumnIndex(OpenableColumns.DISPLAY_NAME).also { moveToFirst() })
                 .also { close() }
         }
+        return "UNKNOWN FILENAME"
     }
 
     // Get information about the sensor file
