@@ -29,4 +29,13 @@
         <item>2.0</item>
         <item>4.0</item>
     </string-array>
+
+    <string-array name="landing_detection_methods_entries">
+        <item>Derivative</item>
+        <item>Moving variance</item>
+    </string-array>
+    <string-array name="landing_detection_methods_values">
+        <item>DERIVATIVE</item>
+        <item>MOVING_VAR</item>
+    </string-array>
 </resources>

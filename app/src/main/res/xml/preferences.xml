@@ -23,4 +23,13 @@
                 resampled to match the specified frequencies"
             android:defaultValue="false"/>
     </PreferenceCategory>
+    <PreferenceCategory android:title="Detection details">
+        <ListPreference
+            android:defaultValue="DERIVATIVE"
+            android:entries="@array/landing_detection_methods_entries"
+            android:entryValues="@array/landing_detection_methods_values"
+            android:key="landing_detection_method"
+            android:title="Landing detection method"
+            app:useSimpleSummaryProvider="true"/>
+    </PreferenceCategory>
 </PreferenceScreen>
