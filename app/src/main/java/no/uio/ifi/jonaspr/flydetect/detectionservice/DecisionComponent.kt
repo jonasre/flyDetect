@@ -166,6 +166,8 @@ class DecisionComponent(
         val ma = movingAverage(window, ACC_MOVING_AVG_WINDOW_SIZE)
         val mv = movingVariance(window, ACC_MOVING_VAR_WINDOW_SIZE)
 
+        nextAccCheckTime = window[window.lastIndex].first
+
         var timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL
         // If something of interest is found, increase nextCheckWindow
         // this may be repeated until nextCheckWindow reaches the maximum size of the buffer (ish)
@@ -609,7 +611,7 @@ class DecisionComponent(
 
         // Acceleration must be within TAKEOFF_ROLL_ACC_RANGE for this amount of time to qualify as
         // takeoff roll
-        private const val TAKEOFF_ROLL_TIME_MIN = 20_000_000_000 //nanoseconds (ns)
+        private const val TAKEOFF_ROLL_TIME_MIN = 17_000_000_000 //nanoseconds (ns)
 
         // Acceleration must be within this range to qualify as liftoff
         private val LIFTOFF_ACC_RANGE = 10.6..12.0 // m/s^2
@@ -619,7 +621,7 @@ class DecisionComponent(
         private const val LIFTOFF_TIME_MIN = 5_000_000_000 //nanoseconds (ns)
 
         // Liftoff must be detected before this time has passed since takeoff roll was detected
-        private const val ROLL_LIFTOFF_MAX_DELAY = 33_000_000_000 //nanoseconds (ns)
+        private const val ROLL_LIFTOFF_MAX_DELAY = 36_000_000_000 //nanoseconds (ns)
 
         // Liftoff cannot be detected without at least this many sensor samples
         private const val MIN_EVENTS_LIFTOFF = (LIFTOFF_TIME_MIN/1_000_000_000) * 5
