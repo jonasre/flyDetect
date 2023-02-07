@@ -44,7 +44,8 @@ class DecisionComponent(
         }
 
         computedBarWindow = when (landingDetectionMethod) {
-            "DERIVATIVE" -> DEFAULT_BAR_CHECK_INTERVAL + BAR_MOVING_AVG_WINDOW_SIZE*1_000_000L
+            "DERIVATIVE" -> DEFAULT_BAR_CHECK_INTERVAL + BAR_MOVING_AVG_WINDOW_SIZE*1_000_000L +
+                    DERIVATIVE_TIME_STEP*1_000_000L
             "MOVING_VAR" -> DEFAULT_BAR_CHECK_INTERVAL + BAR_MOVING_AVG_WINDOW_SIZE*1_000_000L +
                     BAR_MOVING_VAR_WINDOW_SIZE*1_000_000L
             else -> throw java.lang.Exception("Illegal argument for landing detection method")
