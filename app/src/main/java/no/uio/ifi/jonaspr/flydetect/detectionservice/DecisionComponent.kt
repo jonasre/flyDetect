@@ -20,6 +20,11 @@ class DecisionComponent(
     private var accOffset = 0f
     private val accBuffer: SensorDataRingBuffer
     private val barBuffer: SensorDataRingBuffer
+    private val pressurePlateauDetectionMethod: (src: Array<Pair<Long, Float>>, index: Int) -> Int
+
+    // The computed window size for pressure, compensated with the window size of moving average
+    // and, potentially, variance
+    private val computedBarWindow: Long
 
     init {
         // Set appropriate buffer size. This is to avoid buffer overflow when using a sensor file
@@ -31,6 +36,19 @@ class DecisionComponent(
             if (sensorInjection) 4 * SECONDS_OF_BAR else (barFrequency * SECONDS_OF_BAR).toInt()
         accBuffer = SensorDataRingBuffer(accSize)
         barBuffer = SensorDataRingBuffer(barSize)
+
+        pressurePlateauDetectionMethod = when (landingDetectionMethod) {
+            "DERIVATIVE" -> ::detectPressurePlateauDerivative
+            "MOVING_VAR" -> ::detectPressurePlateauVariance
+            else -> throw java.lang.Exception("Illegal argument for landing detection method")
+        }
+
+        computedBarWindow = when (landingDetectionMethod) {
+            "DERIVATIVE" -> DEFAULT_BAR_CHECK_INTERVAL + BAR_MOVING_AVG_WINDOW_SIZE*1_000_000L
+            "MOVING_VAR" -> DEFAULT_BAR_CHECK_INTERVAL + BAR_MOVING_AVG_WINDOW_SIZE*1_000_000L +
+                    BAR_MOVING_VAR_WINDOW_SIZE*1_000_000L
+            else -> throw java.lang.Exception("Illegal argument for landing detection method")
+        }
     }
 
     private var flightStart = -1
@@ -48,7 +66,7 @@ class DecisionComponent(
     private var startTime = 0L
 
     private var nextCheckWindowAcc: Int = (COMPUTED_ACC_WINDOW/1_000_000_000).toInt()
-    private var nextCheckWindowBar: Int = (COMPUTED_BAR_WINDOW/1_000_000_000).toInt()
+    private var nextCheckWindowBar: Int = (computedBarWindow/1_000_000_000).toInt()
 
     fun currentlyFlying() = flyingLive.value!!
     fun flyingLiveData(): LiveData<Boolean> = flyingLive
@@ -104,7 +122,7 @@ class DecisionComponent(
     // This function should only be called once to initialize before sensor data is provided
     fun setStartTime(i: Long) {
         nextAccCheckTime = i + COMPUTED_ACC_WINDOW
-        nextBarCheckTime = i + COMPUTED_BAR_WINDOW
+        nextBarCheckTime = i + computedBarWindow
         startTime = i
     }
 
@@ -305,7 +323,7 @@ class DecisionComponent(
             ) i++
             if (i >= average.size) break // Stop if end of array was reached
 
-            when (val plateauIndex = detectPressurePlateauVariance(average, i)) {
+            when (val plateauIndex = pressurePlateauDetectionMethod(average, i)) {
                 -2 -> {
                     // End of data reached when pressure could be stable, schedule next check sooner
                     Log.v(TAG, "End of data was reached while pressure could be stable, " +
@@ -366,10 +384,49 @@ class DecisionComponent(
     }
 
     /**
-     * Looks for a pressure plateau, i.e., where pressure is stable, using derivative.
+     * Looks for a pressure plateau, i.e., where pressure is stable, using derivative. The
+     * derivative is calculated from [movingAverage].
+     *
+     * @return
+     * The index of the pressure plateau in [movingAverage], if found. Index calculated with
+     * [startIndex].
+     *
+     * -1 if pressure is not stable.
      */
-    private fun detectPressurePlateauDerivative() {
+    private fun detectPressurePlateauDerivative(
+        movingAverage: Array<Pair<Long, Float>>,
+        startIndex: Int
+    ): Int {
+        val derivatives = derivative(movingAverage.copyOfRange(startIndex, movingAverage.size))
+        for (i in derivatives.indices) {
+            if (abs(derivatives[i].second) <= STABLE_PRESSURE_DERIVATIVE_THRESHOLD)
+                return i + startIndex
+        }
+        return -1
+    }
 
+    private fun derivative(source: Array<Pair<Long, Float>>): Array<Pair<Long, Float>> {
+        if (source.isEmpty()) return arrayOf()
+        val derivatives = FloatArray(source.size)
+
+        val highestTimestamp = source[source.lastIndex].first
+        var top = 0
+        for (i in source.indices) {
+            val ceil = source[i].first + DERIVATIVE_TIME_STEP
+            // Find top index for window
+            while (top < source.size && source[top].first < ceil) top++
+            if (top > source.lastIndex || source[top].first > highestTimestamp) {
+                // Return when the second point used in the derivative doesn't exist.
+                return Array(i) {
+                    Pair(source[it].first, derivatives[it])
+                }
+            }
+            val sTop = source[top]
+            val sCur = source[i]
+            val timeDiffSeconds = (sTop.first - sCur.first)/1_000_000_000.toDouble()
+            derivatives[i] = ((sTop.second - sCur.second) / timeDiffSeconds).toFloat()
+        }
+        return arrayOf() // for the compiler
     }
 
     /**
@@ -590,6 +647,12 @@ class DecisionComponent(
         // stable
         private const val STABLE_PRESSURE_MIN_TIME = 8_700_000_000 //nanoseconds (ns)
 
+        // Time step for the derivative
+        private const val DERIVATIVE_TIME_STEP = 1_000 //milliseconds (ms)
+
+        // Pressure is considered stable once it goes below this threshold
+        private const val STABLE_PRESSURE_DERIVATIVE_THRESHOLD = 0.015f //derivative
+
         // Difference from last stable pressure value must be at least this to qualify as a new
         // plateau
         private const val STABLE_PRESSURE_MIN_DIFF = 1.2f //hPa
@@ -604,10 +667,5 @@ class DecisionComponent(
         // Stable pressure before landing can't last longer than this to qualify as pre-landing
         // pressure
         private const val LANDING_PRESSURE_MAX_TIME = 620_000_000_000 //nanoseconds (ns)
-
-        // The computed window size for pressure, compensated with the window size of moving average
-        // and variance
-        private const val COMPUTED_BAR_WINDOW = DEFAULT_BAR_CHECK_INTERVAL +
-                BAR_MOVING_AVG_WINDOW_SIZE*1_000_000L + BAR_MOVING_VAR_WINDOW_SIZE*1_000_000L
     }
 }
