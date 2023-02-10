@@ -174,17 +174,21 @@ class DetectionService : Service() {
     }
 
     fun notifyFlightStatusChange(flying: Boolean, forced: Boolean) {
+        val broadcastIntent: Intent
         if (isUsingSensorInjection) return
         if (flying) {
             // This is the start of a new flight
             currentFlight = Flight(System.currentTimeMillis())
             currentFlight!!.forcedStart = forced
+            broadcastIntent = Intent("no.uio.ifi.jonaspr.flydetect.FLIGHT_BEGIN")
         } else {
             // This is the end of a flight
             currentFlight!!.end = System.currentTimeMillis()
             currentFlight!!.forcedEnd = forced
             Storage.saveFlight(applicationContext, currentFlight!!)
+            broadcastIntent = Intent("no.uio.ifi.jonaspr.flydetect.FLIGHT_END")
         }
+        applicationContext.sendBroadcast(broadcastIntent)
     }
 
     companion object {
