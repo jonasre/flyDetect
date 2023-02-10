@@ -61,4 +61,8 @@
         detection.
     </string>
     <string name="no_flights_registered">No flights registered</string>
+    <string name="sensorRequirement">
+        &appname; requires both an accelerometer and a barometer to work. Without one or both, the
+        app will not function properly.
+    </string>
 </resources>

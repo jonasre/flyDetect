@@ -1,9 +1,12 @@
 package no.uio.ifi.jonaspr.flydetect
 
+import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.hardware.Sensor
+import android.hardware.SensorManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.IBinder
@@ -78,6 +81,27 @@ class MainActivity : AppCompatActivity() {
         // Bind to DetectionService if it's already running
         if (DetectionService.running) {
             bindDetectionService()
+        }
+
+        checkSensorAvailability()
+    }
+
+    private fun checkSensorAvailability() {
+        val sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
+        val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        val barometer = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
+
+        // Return if both sensors are available
+        if (accelerometer != null && barometer != null) return
+
+        val report = "Accelerometer: ${if (accelerometer == null) "Not found" else "Available"}\n" +
+                "Barometer: ${if (barometer == null) "Not found" else "Available"}"
+
+        AlertDialog.Builder(this).apply {
+            setTitle("Missing required sensor")
+            setMessage(getString(R.string.sensorRequirement) + "\n\n$report")
+            setPositiveButton("Close") { _, _ -> }
+            show()
         }
     }
 
