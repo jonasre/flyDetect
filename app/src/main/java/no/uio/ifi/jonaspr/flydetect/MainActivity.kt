@@ -23,9 +23,14 @@ import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
 import androidx.preference.PreferenceManager
 import com.google.android.material.navigation.NavigationView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import no.uio.ifi.jonaspr.flydetect.databinding.ActivityMainBinding
 import no.uio.ifi.jonaspr.flydetect.detectionservice.DetectionService
 import no.uio.ifi.jonaspr.flydetect.detectionservice.DetectionServiceBinder
+import no.uio.ifi.jonaspr.flydetect.`interface`.Failable
+import java.io.FileNotFoundException
 
 class MainActivity : AppCompatActivity() {
 
@@ -80,7 +85,7 @@ class MainActivity : AppCompatActivity() {
 
         // Bind to DetectionService if it's already running
         if (DetectionService.running) {
-            bindDetectionService()
+            bindDetectionService(null)
         }
 
         checkSensorAvailability()
@@ -111,37 +116,56 @@ class MainActivity : AppCompatActivity() {
     }
 
     // Binds to DetectionService. The service is started if it's not already running
-    fun bindDetectionService() {
-        val intent = Intent(this, DetectionService::class.java)
-        if (!DetectionService.running) {
-            // start the service
-            PreferenceManager.getDefaultSharedPreferences(this).let {
-                applicationContext.startForegroundService(intent.apply {
-                    putExtra(
-                        "accSamplingFrequency",
-                        it.getString("acc_sampling_frequency", "")!!.toFloat()
-                    )
-                    putExtra(
-                        "barSamplingFrequency",
-                        it.getString("bar_sampling_frequency", "")!!.toFloat()
-                    )
-                    if (mSensorFile.value != null) {
-                        putExtra("sensorFile", mSensorFile.value)
-                        putExtra("markers", markers as HashMap<String, Int>)
+    fun bindDetectionService(fail: Failable?) {
+        CoroutineScope(Dispatchers.Default).launch {
+            // Build the intent
+            val intent = buildServiceIntent()
+
+            if (!DetectionService.running) {
+                // Verify that the file exists
+                mSensorFile.value?.let {
+                    try {
+                        // Try to open the file
+                        val inStream = contentResolver.openInputStream(it)
+                        inStream?.close()
+                    } catch (e: FileNotFoundException) {
+                        // If we end up here, the file didn't exist
+                        Log.w(TAG, "URI did not exist")
+                        fail?.onFailure()
+                        return@launch
                     }
-                    putExtra("resampleSensorFile", it.getBoolean("resampleSensorFile", true))
-                    putExtra(
-                        "landingDetectionMethod",
-                        it.getString("landing_detection_method", "")
-                    )
-                })
+                }
+                // Start the service
+                applicationContext.startForegroundService(intent)
+            }
+            // Bind to the service
+            bindService(intent, connection, Context.BIND_ABOVE_CLIENT)
+        }
+    }
+
+    // Builds the intent for DetectionService with the settings specified by the user
+    private fun buildServiceIntent(): Intent {
+        return Intent(this, DetectionService::class.java).apply {
+            PreferenceManager.getDefaultSharedPreferences(this@MainActivity).let {
+                putExtra(
+                    "accSamplingFrequency",
+                    it.getString("acc_sampling_frequency", "")!!.toFloat()
+                )
+                putExtra(
+                    "barSamplingFrequency",
+                    it.getString("bar_sampling_frequency", "")!!.toFloat()
+                )
+                if (mSensorFile.value != null) {
+                    putExtra("sensorFile", mSensorFile.value)
+                    putExtra("markers", markers as HashMap<String, Int>)
+                }
+                putExtra("resampleSensorFile", it.getBoolean("resampleSensorFile", true))
+                putExtra(
+                    "landingDetectionMethod",
+                    it.getString("landing_detection_method", "")
+                )
             }
         }
-        bindService(
-            intent,
-            connection,
-            Context.BIND_ABOVE_CLIENT
-        )
     }
 
     // Stops DetectionService and unbinds from it

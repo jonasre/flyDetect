@@ -8,11 +8,13 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.*
 import no.uio.ifi.jonaspr.flydetect.MainActivity
 import no.uio.ifi.jonaspr.flydetect.R
 import no.uio.ifi.jonaspr.flydetect.databinding.FragmentHomeBinding
 import no.uio.ifi.jonaspr.flydetect.detectionservice.DetectionServiceBinder
+import no.uio.ifi.jonaspr.flydetect.`interface`.Failable
 
 class HomeFragment : Fragment() {
 
@@ -49,7 +51,21 @@ class HomeFragment : Fragment() {
                 }
                 (activity as MainActivity).stopDetectionService()
             } else if (checked && binder == null) {
-                (activity as MainActivity).bindDetectionService()
+                // Start/bind to the service
+                (activity as MainActivity).bindDetectionService(object : Failable {
+                    override fun onFailure() {
+                        // Display error to user
+                        Snackbar.make(
+                            root,
+                            getString(R.string.fileNotFound),
+                            Snackbar.LENGTH_LONG
+                        ).show()
+                        // Flip the switch back to unchecked
+                        activity?.runOnUiThread {
+                            binding.masterSwitch.isChecked = false
+                        }
+                    }
+                })
             }
         }
 
