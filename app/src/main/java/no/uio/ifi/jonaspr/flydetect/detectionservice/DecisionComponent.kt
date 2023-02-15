@@ -316,6 +316,8 @@ class DecisionComponent(
         val average = movingAverage(window, BAR_MOVING_AVG_WINDOW_SIZE)
         var timeUntilNextCheck = DEFAULT_BAR_CHECK_INTERVAL
 
+        nextBarCheckTime = window[window.lastIndex].first
+
         var i = 0
         while (i < average.size && flying) {
             // Loop until end of array or until pressure has left its stable level
