@@ -66,4 +66,5 @@
         app will not function properly.
     </string>
     <string name="fileNotFound">Selected file was not found. Try to select the file again.</string>
+    <string name="nextAnalysis">Next analysis in %1$s</string>
 </resources>

@@ -14,4 +14,5 @@ class DetectionServiceBinder(service: DetectionService): Binder() {
     fun forceFlight(x: Boolean) = service.get()!!.decisionComponent.setFlyingStatus(x)
     fun flightStats() = service.get()!!.getStats()
     fun isUsingSensorInjection() = service.get()!!.isUsingSensorInjection
+    fun secondsUntilNextAnalysis() = service.get()!!.decisionComponent.secondsUntilNextAnalysis()
 }

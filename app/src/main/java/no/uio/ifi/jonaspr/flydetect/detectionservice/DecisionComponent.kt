@@ -1,6 +1,7 @@
 package no.uio.ifi.jonaspr.flydetect.detectionservice
 
 import android.hardware.Sensor
+import android.os.SystemClock
 import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -573,6 +574,17 @@ class DecisionComponent(
             mv[i] = total/(top-i)
         }
         return arrayOf() // for the compiler
+    }
+
+    /**
+     * Intended for displaying status on UI
+     *
+     * @return
+     * Time in seconds until next analysis of sensor data
+     */
+    fun secondsUntilNextAnalysis(): Int {
+        val analysisTime = if (flying) nextBarCheckTime else nextAccCheckTime
+        return ((analysisTime - SystemClock.elapsedRealtimeNanos())/1_000_000_000).toInt()
     }
 
     companion object {

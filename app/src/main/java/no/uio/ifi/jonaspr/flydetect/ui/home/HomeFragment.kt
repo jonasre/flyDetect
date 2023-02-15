@@ -12,6 +12,7 @@ import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.*
 import no.uio.ifi.jonaspr.flydetect.MainActivity
 import no.uio.ifi.jonaspr.flydetect.R
+import no.uio.ifi.jonaspr.flydetect.Util
 import no.uio.ifi.jonaspr.flydetect.databinding.FragmentHomeBinding
 import no.uio.ifi.jonaspr.flydetect.detectionservice.DetectionServiceBinder
 import no.uio.ifi.jonaspr.flydetect.`interface`.Failable
@@ -108,6 +109,7 @@ class HomeFragment : Fragment() {
         job?.cancel()
         binding.flyingStatus.text = ""
         binding.latestSensorData.text = ""
+        binding.nextAnalysis.text = ""
     }
 
     private fun showReplayIfAppropriate() {
@@ -118,10 +120,12 @@ class HomeFragment : Fragment() {
         ) {
             binding.sensorFileLoaded.visibility = View.VISIBLE
             binding.replayProgress.visibility = View.VISIBLE
+            binding.nextAnalysis.visibility = View.GONE
             binding.flightButton.isEnabled = false
         } else {
             binding.sensorFileLoaded.visibility = View.GONE
             binding.replayProgress.visibility = View.GONE
+            binding.nextAnalysis.visibility = View.VISIBLE
             binding.flightButton.isEnabled = true
         }
     }
@@ -150,18 +154,11 @@ class HomeFragment : Fragment() {
                 binding.masterSwitch.isChecked = true
                 binding.flightButton.visibility = View.VISIBLE
 
-
+                // UI update loop
                 job = CoroutineScope(Dispatchers.Main).launch {
                     while (true) {
                         try {
-                            serviceBinder?.let { sb ->
-                                val flying = it.flying()
-                                binding.latestSensorData.text = if (flying)
-                                    String.format(getString(R.string.pressure_display), it.latestBarSample())
-                                else
-                                    String.format(getString(R.string.acceleration_display), it.latestAccSample())
-                                binding.replayProgress.progress = sb.replayProgress()
-                            }
+                            updateUI()
                             delay(100)
                         } catch (e: CancellationException) {
                             // This block is to avoid catching JobCancellationException in the next
@@ -197,6 +194,27 @@ class HomeFragment : Fragment() {
                 binding.replayProgress.progress = 0
                 binding.flightButton.visibility = View.INVISIBLE
             }
+        }
+    }
+
+    // Function called from a loop that updates the UI with user relevant information
+    private fun updateUI() {
+        serviceBinder?.let { sb ->
+            val flying = sb.flying()
+            // Display pressure or acceleration depending on flight status
+            binding.latestSensorData.text = if (flying)
+                String.format(getString(R.string.pressure_display), sb.latestBarSample())
+            else
+                String.format(getString(R.string.acceleration_display), sb.latestAccSample())
+
+            // Update replay status (only visible if file is loaded)
+            binding.replayProgress.progress = sb.replayProgress()
+
+            // Display time until next analysis
+            val time = sb.secondsUntilNextAnalysis()
+            val timeString = if (time < 0)
+                "00:00\n(waiting for data from sensors)" else Util.formatSecondsMMSS(time)
+            binding.nextAnalysis.text = String.format(getString(R.string.nextAnalysis), timeString)
         }
     }
 

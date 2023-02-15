@@ -34,6 +34,14 @@ object Util {
         return prefix + formatSeconds(abs(duration))
     }
 
+    // Formats seconds to mm:ss
+    fun formatSecondsMMSS(duration: Int): String {
+        val minutes = duration / 60
+        val seconds = duration % 60
+
+        return String.format("%02d:%02d", minutes, seconds)
+    }
+
     fun dateFormatTh(time: Long): String {
         val cal = Calendar.getInstance()
         cal.timeInMillis = time
