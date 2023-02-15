@@ -1,11 +1,15 @@
 package no.uio.ifi.jonaspr.flydetect.ui.home
 
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.app.AlertDialog
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.LinearInterpolator
+import android.widget.ImageView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.google.android.material.snackbar.Snackbar
@@ -16,6 +20,7 @@ import no.uio.ifi.jonaspr.flydetect.Util
 import no.uio.ifi.jonaspr.flydetect.databinding.FragmentHomeBinding
 import no.uio.ifi.jonaspr.flydetect.detectionservice.DetectionServiceBinder
 import no.uio.ifi.jonaspr.flydetect.`interface`.Failable
+import kotlin.random.Random
 
 class HomeFragment : Fragment() {
 
@@ -28,6 +33,8 @@ class HomeFragment : Fragment() {
     private var serviceBinder: DetectionServiceBinder? = null
     private var job: Job? = null
     private var sensorFileLoaded = false
+    private var clouds: Array<ImageView> = emptyArray()
+    private var animators: List<ObjectAnimator> = emptyList()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -40,6 +47,9 @@ class HomeFragment : Fragment() {
         _binding = FragmentHomeBinding.inflate(inflater, container, false)
         val root: View = binding.root
 
+        clouds = Array(NUM_CLOUDS) { createCloudIcon() }
+        binding.aircraftIcon.bringToFront()
+
         binding.masterSwitch.setOnCheckedChangeListener { _, checked ->
             // Since the switch is might be toggled automatically when the app starts,
             // we must make sure that the service doesn't start if it's already running,
@@ -50,6 +60,7 @@ class HomeFragment : Fragment() {
                     val m = homeViewModel.generateFlightStatsMessage(binder.flightStats())
                     displayFlightStats(m)
                 }
+                stopAnimation()
                 (activity as MainActivity).stopDetectionService()
             } else if (checked && binder == null) {
                 // Start/bind to the service
@@ -173,6 +184,7 @@ class HomeFragment : Fragment() {
 
                 it.flyingLiveData().observe(viewLifecycleOwner) { flying ->
                     if (flying) {
+                        animators = startAnimation()
                         binding.flyingStatus.text = getString(R.string.flyingStateTrue)
                         binding.flightButton.text = getString(R.string.forceFlightFalse)
                         binding.flightButton.setCompoundDrawablesWithIntrinsicBounds(
@@ -180,6 +192,7 @@ class HomeFragment : Fragment() {
                             0, 0, 0
                         )
                     } else {
+                        stopAnimation()
                         binding.flyingStatus.text = getString(R.string.flyingStateFalse)
                         binding.flightButton.text = getString(R.string.forceFlightTrue)
                         binding.flightButton.setCompoundDrawablesWithIntrinsicBounds(
@@ -218,6 +231,83 @@ class HomeFragment : Fragment() {
         }
     }
 
+    // Creates the animators, un-hides the images and starts the animation
+    private fun startAnimation(): List<ObjectAnimator> {
+        // Create the aircraft animator
+        val aircraftAnim = ObjectAnimator.ofFloat(
+            binding.aircraftIcon,
+            "translationY",
+            -50f,
+            50f
+        ).apply {
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            duration = 3000
+            start()
+        }
+
+        binding.aircraftIcon.visibility = View.VISIBLE
+
+        // Create animators for clouds
+        val objectAnimators = clouds.map { cloudIcon ->
+            // Generate random duration, set scale from duration
+            val animationDuration = Random.nextLong(4000, 12000)
+            val scale = 9_000f / animationDuration
+            // Calculate an offset so that the clouds go completely out of the frame on both sides
+            // of the screen. Also, avoid clouds getting cut off at the top or bottom.
+            val offset: Float = if (scale < 1) 0f else (scale - 1) * cloudIcon.width
+            val maxHeight = binding.animationWindow.height - cloudIcon.height
+
+            cloudIcon.apply {
+                visibility = View.VISIBLE // Make the cloud visible
+                translationX = binding.animationWindow.width.toFloat() + offset // Set start x
+                y = (0..maxHeight - offset.toInt()).random().toFloat() // Set y position
+
+                // Scale the cloud up or down
+                scaleX = scale
+                scaleY = scale
+                // Large clouds are brought in front of the aircraft
+                if (scale > 1) bringToFront()
+            }
+
+            // Create the animator
+            ObjectAnimator.ofFloat(
+                cloudIcon,
+                "translationX",
+                binding.animationWindow.width.toFloat(),
+                -cloudIcon.width.toFloat() - offset
+            ).apply {
+                interpolator = LinearInterpolator()
+                repeatCount = ValueAnimator.INFINITE
+                duration = animationDuration
+                startDelay = Random.nextLong(6000)
+                start()
+            }
+        } as MutableList
+        // Add the aircraft animator to the list as well
+        objectAnimators.add(aircraftAnim)
+
+        return objectAnimators
+    }
+
+    // Stops the animation, makes the animated images invisible
+    private fun stopAnimation() {
+        for (i in animators.indices) animators[i].cancel()
+        for (i in clouds.indices) clouds[i].visibility = View.INVISIBLE
+        binding.aircraftIcon.visibility = View.INVISIBLE
+        animators = emptyList()
+    }
+
+    // Creates a cloud, an ImageView, and adds it to the animation window
+    private fun createCloudIcon(): ImageView {
+        val cloudIcon = ImageView(activity)
+        cloudIcon.setImageResource(R.drawable.baseline_cloud_24)
+        cloudIcon.visibility = View.INVISIBLE
+        binding.animationWindow.addView(cloudIcon)
+
+        return cloudIcon
+    }
+
     override fun onPause() {
         super.onPause()
         stopUiUpdate()
@@ -230,5 +320,6 @@ class HomeFragment : Fragment() {
 
     companion object {
         private const val TAG = "home"
+        private const val NUM_CLOUDS = 10
     }
 }
