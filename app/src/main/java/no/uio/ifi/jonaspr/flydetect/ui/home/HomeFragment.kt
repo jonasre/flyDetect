@@ -48,7 +48,7 @@ class HomeFragment : Fragment() {
         val root: View = binding.root
 
         clouds = Array(NUM_CLOUDS) { createCloudIcon() }
-        binding.aircraftIcon.bringToFront()
+        //binding.aircraftIcon.bringToFront()
 
         binding.masterSwitch.setOnCheckedChangeListener { _, checked ->
             // Since the switch is might be toggled automatically when the app starts,
@@ -248,10 +248,16 @@ class HomeFragment : Fragment() {
 
         binding.aircraftIcon.visibility = View.VISIBLE
 
+        // Generate random durations for the cloud animations
+        val durations = Array(NUM_CLOUDS) { Random.nextLong(4000, 12000) }
+        durations.sort() // Sort the durations
+        var counter = durations.lastIndex // used to iterate backwards
+        var aircraftToFront = false // Keeps track of if the aircraft has been moved to front yet
+
         // Create animators for clouds
         val objectAnimators = clouds.map { cloudIcon ->
             // Generate random duration, set scale from duration
-            val animationDuration = Random.nextLong(4000, 12000)
+            val animationDuration = durations[counter]
             val scale = 9_000f / animationDuration
             // Calculate an offset so that the clouds go completely out of the frame on both sides
             // of the screen. Also, avoid clouds getting cut off at the top or bottom.
@@ -266,9 +272,16 @@ class HomeFragment : Fragment() {
                 // Scale the cloud up or down
                 scaleX = scale
                 scaleY = scale
-                // Large clouds are brought in front of the aircraft
-                if (scale > 1) bringToFront()
+                // Move the cloud to the front on z axis
+                bringToFront()
             }
+
+            // Move the aircraft to front at the appropriate time
+            if (!aircraftToFront && counter < durations.size / 1.5) {
+                binding.aircraftIcon.bringToFront()
+                aircraftToFront = true
+            }
+            counter--
 
             // Create the animator
             ObjectAnimator.ofFloat(
