@@ -149,6 +149,7 @@ class DecisionComponent(
             service.registerSensorListener(Sensor.TYPE_ACCELEROMETER)
             service.unregisterSensorListener(Sensor.TYPE_PRESSURE)
             barBuffer.clear()
+            lastPressurePlateau = Pair(0, 0f) // reset
         }
 
         // Stats variables
