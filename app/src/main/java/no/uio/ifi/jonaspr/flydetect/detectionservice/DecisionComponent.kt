@@ -165,17 +165,14 @@ class DecisionComponent(
     }
 
     private fun checkAcc() {
+        if (flying) throw IllegalStateException("checkAcc called when flying")
         val window = accBuffer.getLatest(nextCheckWindowAcc)
         val ma = movingAverage(window, ACC_MOVING_AVG_WINDOW_SIZE)
         val mv = movingVariance(window, ACC_MOVING_VAR_WINDOW_SIZE)
 
         nextAccCheckTime = window[window.lastIndex].first
-
         var timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL
-        // If something of interest is found, increase nextCheckWindow
-        // this may be repeated until nextCheckWindow reaches the maximum size of the buffer (ish)
-        // If nothing of interest is found, reset nextCheckWindow to its default value
-        var i = 0
+
         if (ma.isEmpty()) {
             timeUntilNextCheck += window[0].first - nextAccCheckTime
             Log.w(TAG, "Received empty moving average (gap in data?). Window: ${window.size}")
@@ -187,126 +184,57 @@ class DecisionComponent(
         if (skip) {
             nextAccCheckTime += timeUntilNextCheck
             Log.v(TAG, "Stopping acc check early because data is too noisy to indicate " +
-                    "flying (approximate time: ${asSeconds(ma[i].first)} s)")
+                    "flying (approximate time: ${asSeconds(window[0].first)} s)")
             return
         }
 
-        // Find acceleration offset
-        val stableIndex = accStableIndex(mv)
-        if (stableIndex >= 0) {
-            accOffset = GRAVITY_ACC - ma[stableIndex].second
-            Log.d(TAG, "accOffset now $accOffset (at ${asSeconds(ma[stableIndex].first)} s)")
-        }
+        // Normalize data
+        normalize(ma, mv)
 
-        // Apply normalization
-        for (j in ma.indices) ma[j] = Pair(ma[j].first, ma[j].second+accOffset)
-
+        var i = 0
         while (i < ma.size) {
-            if (!flying && !roll) {
-                // Find first occurrence of acceleration withing takeoff roll range
-                var rollStart = 0L
-                while (i < ma.size) {
-                    val (timestamp, value) = ma[i++]
-                    if (value in TAKEOFF_ROLL_ACC_RANGE) {
-                        rollStart = timestamp
-                        break
-                    }
-                }
-
-                var remainsInRange = rollStart != 0L
-                // Keep iterating to check if acceleration remains withing the correct range
-                while (i < ma.size && ma[i].first <= TAKEOFF_ROLL_TIME_MIN + rollStart) {
-                    if (ma[i++].second !in TAKEOFF_ROLL_ACC_RANGE) {
-                        // This means takeoff roll did not happen.
-                        remainsInRange = false
-                        break
-                    }
-                }
-                // Acceleration was not within the range, restart loop
-                if (!remainsInRange) continue
-
-                // Did acceleration remain in range long enough that takeoff roll could've happened
-                if (i >= ma.size) {
-                    Log.v(TAG, "Some data looks like takeoff roll, awaiting more to confirm")
-                    // Could be takeoff roll, but we ran out of data.
-                    // Next check should be done sooner than normal
-                    timeUntilNextCheck /= 2
-                } else {
-                    Log.v(TAG, "Takeoff roll detected at ${ma[i].first} " +
-                            "(aka ${asSeconds(ma[i].first)}s)")
-                    roll = remainsInRange
-                    rollTimestamp = ma[i].first
-                }
-            } else if (!flying && roll) {
-                val latestTimeLiftoff = rollTimestamp + ROLL_LIFTOFF_MAX_DELAY
-                while (i < ma.size) {
-                    var liftoffEndTime = -1L
-                    // Loop until the end of the buffer or until the max delay for liftoff
-                    while (i < ma.size && ma[i].first < latestTimeLiftoff) {
-                        // Find first occurrence of acceleration in liftoff range
-                        if (ma[i].second in LIFTOFF_ACC_RANGE) {
-                            liftoffEndTime = ma[i].first + LIFTOFF_TIME_MIN
-                            break
-                        }
-                        i++
-                    }
-
-                    if (liftoffEndTime == -1L) {
-                        // If latestTimeLiftoff is reached without finding a value in liftoff range
-                        // In other words - no data was in liftoff range within the time limit
-                        // or there is a gap in the data
-                        if (i < ma.size && ma[i].first >= latestTimeLiftoff) {
-                            Log.v(TAG, "(STAGE 1) No liftoff detected, takeoff roll was " +
-                                    "likely a false positive")
-                            roll = false
-                            break
-                        }
-                        // If there wasn't enough data to determine if liftoff happened or not
-                        if (i >= ma.size) {
-                            Log.v(TAG, "(STAGE 1) Not enough data in buffer to detect" +
-                                    " liftoff, next check will be scheduled sooner")
-                            timeUntilNextCheck /= 2
-                            break
-                        }
-                    }
-
-                    val startIterate = i
-                    var remainsInRangeLiftoff = i < ma.size
-                    while (i < ma.size && ma[i].first < liftoffEndTime) {
-                        if (ma[i++].second !in LIFTOFF_ACC_RANGE) {
-                            remainsInRangeLiftoff = false
-                            break
-                        }
-                    }
-                    val iterations = i - startIterate
-
-                    // Data found wasn't in the liftoff range, restart loop
-                    if (!remainsInRangeLiftoff) continue
-
-                    // There wasn't enough data in the buffer to determine if liftoff happened
-                    if (i >= ma.size) {
-                        Log.v(TAG, "(STAGE 2) Not enough data in buffer to detect liftoff, " +
-                                "next check will be scheduled sooner")
+            if (!roll) {
+                val takeoffRoll = takeoffRollDetection(ma, i)
+                i = takeoffRoll
+                when (takeoffRoll) {
+                    -1 -> break
+                    -2 -> {
+                        // Could be takeoff roll, but we ran out of data.
+                        Log.v(TAG, "End of buffer could contain takeoff roll, next check " +
+                                "will be scheduled sooner")
+                        // Schedule next check sooner than normal
                         timeUntilNextCheck /= 2
                         break
                     }
-                    // Liftoff possible, but too little data to be sure
-                    if (iterations < MIN_EVENTS_LIFTOFF) {
-                        Log.v(TAG, "(STAGE 2) Liftoff might've happened but there were too " +
-                                "many gaps in the data to be sure. Takeoff roll now " +
-                                "considered false positive")
-                        roll = false
-                        break
+                    else -> {
+                        Log.v(TAG, "Takeoff roll detected at ${ma[i].first} " +
+                                "(aka ${asSeconds(ma[i].first)}s)")
+                        roll = true
+                        rollTimestamp = ma[i].first
                     }
-                    // If this point is reached then liftoff was detected
-                    // takeoff roll + liftoff = flight
-                    setFlyingStatus(true, ma[i].first, window[window.lastIndex].first)
-                    roll = false
-                    Log.i(TAG, "Flight detected at ${ma[i].first} (aka " +
-                            "${asSeconds(ma[i].first)} s)")
-                    break
                 }
             } else {
+                val latestTimeLiftoff = rollTimestamp + ROLL_LIFTOFF_MAX_DELAY
+                val liftoff = liftoffDetection(ma, i, latestTimeLiftoff)
+                i = liftoff
+                when (liftoff) {
+                    -1 -> {
+                        Log.v(TAG, "No liftoff detected, takeoff roll was likely a " +
+                                "false positive")
+                        roll = false
+                    }
+                    -2 -> {
+                        Log.v(TAG, "Not enough data in buffer to detect liftoff, next " +
+                                "check will be scheduled sooner")
+                        timeUntilNextCheck /= 2
+                    }
+                    else -> {
+                        setFlyingStatus(true, ma[i].first, window[window.lastIndex].first)
+                        roll = false
+                        Log.i(TAG, "Flight detected at ${ma[i].first} (aka " +
+                                "${asSeconds(ma[i].first)} s)")
+                    }
+                }
                 break
             }
         }
@@ -412,28 +340,15 @@ class DecisionComponent(
         return -1
     }
 
-    private fun derivative(source: Array<Pair<Long, Float>>): Array<Pair<Long, Float>> {
-        if (source.isEmpty()) return arrayOf()
-        val derivatives = FloatArray(source.size)
-
-        val highestTimestamp = source[source.lastIndex].first
-        var top = 0
-        for (i in source.indices) {
-            val ceil = source[i].first + DERIVATIVE_TIME_STEP
-            // Find top index for window
-            while (top < source.size && source[top].first < ceil) top++
-            if (top > source.lastIndex || source[top].first > highestTimestamp) {
-                // Return when the second point used in the derivative doesn't exist.
-                return Array(i) {
-                    Pair(source[it].first, derivatives[it])
-                }
-            }
-            val sTop = source[top]
-            val sCur = source[i]
-            val timeDiffSeconds = (sTop.first - sCur.first)/1_000_000_000.toDouble()
-            derivatives[i] = ((sTop.second - sCur.second) / timeDiffSeconds).toFloat()
+    private fun normalize(ma: Array<Pair<Long, Float>>, mv: Array<Pair<Long, Float>>) {
+        // Find acceleration offset
+        val stableIndex = accStableIndex(mv)
+        if (stableIndex >= 0) {
+            accOffset = GRAVITY_ACC - ma[stableIndex].second
+            Log.d(TAG, "accOffset now $accOffset (at ${asSeconds(ma[stableIndex].first)} s)")
         }
-        return arrayOf() // for the compiler
+        // Apply normalization
+        for (j in ma.indices) ma[j] = Pair(ma[j].first, ma[j].second+accOffset)
     }
 
     /**
@@ -454,20 +369,48 @@ class DecisionComponent(
         ) >= 0
     }
 
+    private fun takeoffRollDetection(source: Array<Pair<Long, Float>>, startIndex: Int): Int {
+        val ret = filterRangeMin(
+            source.copyOfRange(startIndex, source.size),
+            TAKEOFF_ROLL_ACC_RANGE,
+            TAKEOFF_ROLL_TIME_MIN
+        )
+        return if (ret < 0) ret else ret + startIndex
+    }
+
+    private fun liftoffDetection(
+        source: Array<Pair<Long, Float>>,
+        startIndex: Int,
+        deadline: Long
+    ): Int {
+        val ret = filterRangeMin(
+            source.copyOfRange(startIndex, source.size),
+            LIFTOFF_ACC_RANGE,
+            LIFTOFF_TIME_MIN
+        )
+        // -1 if liftoff was detected but after the deadline
+        if (ret >= 0 && source[ret + startIndex].first > deadline) return -1
+        // -1 if acceleration was within the range at the end of the data, but deadline was exceeded
+        if (ret == -2 && source[source.lastIndex].first > deadline) return -1
+        // -2 if acceleration was not within the range but the deadline has not been reached
+        if (ret == -1 && source[source.lastIndex].first < deadline) return -2
+        return if (ret < 0) ret else ret + startIndex
+    }
+
     /**
-     * Utility function. Find index in [data] where values have been above/below [threshold]
+     * Utility function. Find index in [source] where values have been above/below [threshold]
      * (decided by [successIfBelowThreshold]) for a duration of at least [minTime].
      *
      * @return
-     * The index where [data] was on the correct side of the [threshold] for the specified
+     * The index where [source] was on the correct side of the [threshold] for the specified
      * [minTime], if it happens.
      *
-     * -2 if [data] was on the correct side of the [threshold] but we ran out of data
+     * -2 if [source] was on the correct side of the [threshold] but we ran out of data
      *
-     * -1 if [data] was not on the correct side of the [threshold] and we ran out of data
+     * -1 if [source] was not on the correct side of the [threshold] and we ran out of data
      */
     private fun filterThresholdMin(
-        data: Array<Pair<Long, Float>>,
+        source: Array<Pair<Long, Float>>,
         threshold: Float,
         minTime: Long,
         successIfBelowThreshold: Boolean = true
@@ -476,12 +419,10 @@ class DecisionComponent(
         var startTime = -1L
         val m = if (successIfBelowThreshold) 1 else -1
         val th = threshold*m
-        while (i < data.size) {
-            val (timestamp, value) = data[i]
-            i++
+        while (i < source.size) {
+            val (timestamp, value) = source[i++]
             if (value*m > th) {
                 startTime = -1L
-                continue
             } else if (startTime < 0) {
                 startTime = timestamp
             } else if (timestamp - startTime >= minTime) {
@@ -492,6 +433,41 @@ class DecisionComponent(
         if (startTime >= 0) return -2
         // The data was not on the correct side of the threshold long enough, neither was it on the
         // correct side when we ran out of data
+        return -1
+    }
+
+    /**
+     * Utility function. Find index in [source] where values have been inside [range] for a duration
+     * of at least [minTime].
+     *
+     * @return
+     * The index where [source] was within the [range] for the specified [minTime], if it happens.
+     *
+     * -2 if [source] was on within the [range] but we ran out of data
+     *
+     * -1 if [source] was not within the [range] and we ran out of data
+     */
+    private fun filterRangeMin(
+        source: Array<Pair<Long, Float>>,
+        range: ClosedFloatingPointRange<Float>,
+        minTime: Long
+    ): Int {
+        var i = 0
+        var startTime = -1L
+        while (i < source.size) {
+            val (timestamp, value) = source[i++]
+            if (value !in range) {
+                startTime = -1L
+            } else if (startTime < 0) {
+                startTime = timestamp
+            } else if (timestamp - startTime >= minTime) {
+                return i - 1
+            }
+        }
+        // The data was within the range when we ran out of data
+        if (startTime >= 0) return -2
+        // The data was not within the range long enough, neither was it on the within the range
+        // when we ran out of data
         return -1
     }
 
@@ -577,6 +553,30 @@ class DecisionComponent(
         return arrayOf() // for the compiler
     }
 
+    private fun derivative(source: Array<Pair<Long, Float>>): Array<Pair<Long, Float>> {
+        if (source.isEmpty()) return arrayOf()
+        val derivatives = FloatArray(source.size)
+
+        val highestTimestamp = source[source.lastIndex].first
+        var top = 0
+        for (i in source.indices) {
+            val ceil = source[i].first + DERIVATIVE_TIME_STEP
+            // Find top index for window
+            while (top < source.size && source[top].first < ceil) top++
+            if (top > source.lastIndex || source[top].first > highestTimestamp) {
+                // Return when the second point used in the derivative doesn't exist.
+                return Array(i) {
+                    Pair(source[it].first, derivatives[it])
+                }
+            }
+            val sTop = source[top]
+            val sCur = source[i]
+            val timeDiffSeconds = (sTop.first - sCur.first)/1_000_000_000.toDouble()
+            derivatives[i] = ((sTop.second - sCur.second) / timeDiffSeconds).toFloat()
+        }
+        return arrayOf() // for the compiler
+    }
+
     /**
      * Intended for displaying status on UI
      *
@@ -623,24 +623,21 @@ class DecisionComponent(
         private const val ACC_WALK_MIN_TIME = 12_000_000_000 //nanoseconds (ns)
 
         // Acceleration must be within this range to qualify as takeoff roll
-        private val TAKEOFF_ROLL_ACC_RANGE = 9.95..10.42 // m/s^2
+        private val TAKEOFF_ROLL_ACC_RANGE = 9.95f..10.42f // m/s^2
 
         // Acceleration must be within TAKEOFF_ROLL_ACC_RANGE for this amount of time to qualify as
         // takeoff roll
         private const val TAKEOFF_ROLL_TIME_MIN = 17_000_000_000 //nanoseconds (ns)
 
         // Acceleration must be within this range to qualify as liftoff
-        private val LIFTOFF_ACC_RANGE = 10.6..12.0 // m/s^2
+        private val LIFTOFF_ACC_RANGE = 10.6f..12.0f // m/s^2
 
         // Acceleration must be within LIFTOFF_ACC_RANGE for this amount of time to qualify as
         // liftoff
         private const val LIFTOFF_TIME_MIN = 5_000_000_000 //nanoseconds (ns)
 
         // Liftoff must be detected before this time has passed since takeoff roll was detected
-        private const val ROLL_LIFTOFF_MAX_DELAY = 36_000_000_000 //nanoseconds (ns)
-
-        // Liftoff cannot be detected without at least this many sensor samples
-        private const val MIN_EVENTS_LIFTOFF = (LIFTOFF_TIME_MIN/1_000_000_000) * 5
+        private const val ROLL_LIFTOFF_MAX_DELAY = 41_000_000_000 //nanoseconds (ns)
 
         // The computed window size for acceleration, compensated with the window size of moving
         // average or variance (whichever is greater)
