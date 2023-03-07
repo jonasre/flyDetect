@@ -109,14 +109,14 @@ class DeveloperViewModel : ViewModel() {
                     val timestamp = sensorEvents[i].substring(0, firstColonIndex).toLong()
                     when (sensorEvents[i].substring(firstColonIndex + 1).count { it == ':' }) {
                         0 -> {
-                            if (bar.size < 10) bar.add(timestamp)
+                            if (bar.size < 4) bar.add(timestamp)
                             if (prevBar != 0L && timestamp-prevBar > 1000) {
                                 hole += timestamp-prevBar
                             }
                             prevBar = timestamp
                         }
                         2 -> {
-                            if (acc.size < 10) acc.add(timestamp)
+                            if (acc.size < 4) acc.add(timestamp)
                             if (prevAcc != 0L && timestamp-prevAcc > 1000) {
                                 hole += timestamp-prevAcc
                             }
