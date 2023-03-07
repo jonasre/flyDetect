@@ -126,8 +126,12 @@ class DeveloperViewModel : ViewModel() {
 
                 val accRate = calculateRate(acc)
                 val barRate = calculateRate(bar)
+                var sensorCount = 0
+                if (acc.isNotEmpty()) sensorCount++
+                if (bar.isNotEmpty()) sensorCount++
 
-                val qualityLocal: Float = (duration.toFloat()-(hole/2))/duration
+                // In very rare circumstances, it is possible to get division by zero here
+                val qualityLocal: Float = (duration.toFloat()-(hole/sensorCount))/duration
 
                 _sensorFileTitle.postValue(lines[0])
                 _duration.postValue(Util.formatSeconds((duration/1000).toInt()))
