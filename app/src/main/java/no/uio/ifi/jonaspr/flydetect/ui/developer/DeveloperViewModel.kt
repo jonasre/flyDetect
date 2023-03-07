@@ -96,7 +96,8 @@ class DeveloperViewModel : ViewModel() {
                 }
 
                 val samplesCount = sensorEvents.size
-                i = -1
+                // Start loop later in the recording, early timestamps can be inconsistent
+                i = sensorEvents.size/10
 
                 val acc = ArrayList<Long>()
                 val bar = ArrayList<Long>()
