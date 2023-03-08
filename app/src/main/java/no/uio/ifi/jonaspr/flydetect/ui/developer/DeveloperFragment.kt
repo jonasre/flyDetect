@@ -83,7 +83,7 @@ class DeveloperFragment : Fragment() {
             sensorFileTitle.observe(viewLifecycleOwner) {
                 val replace = if (it != "") it else "N/A"
                 binding.sensorFileTitle.text =
-                    String.format(getString(R.string.sensorFileTitle, replace))
+                    String.format(getString(R.string.sensorFileTitle), replace)
             }
             duration.observe(viewLifecycleOwner) {
                 val replace = if (it != "") it else "N/A"
