@@ -96,8 +96,7 @@ class DeveloperViewModel : ViewModel() {
                 }
 
                 val samplesCount = sensorEvents.size
-                // Start loop later in the recording, early timestamps can be inconsistent
-                i = sensorEvents.size/10
+                i = -1
 
                 val acc = ArrayList<Long>()
                 val bar = ArrayList<Long>()
@@ -107,16 +106,20 @@ class DeveloperViewModel : ViewModel() {
                 while (++i < sensorEvents.size-1) {
                     val firstColonIndex = sensorEvents[i].indexOf(":")
                     val timestamp = sensorEvents[i].substring(0, firstColonIndex).toLong()
+                    if (timestamp < 1000) continue // low timestamps are usually incorrect, skip
                     when (sensorEvents[i].substring(firstColonIndex + 1).count { it == ':' }) {
                         0 -> {
-                            if (bar.size < 4) bar.add(timestamp)
+                            // We use (i > sensorEvents.size/10) to skip the first samples.
+                            // This is to avoid irregular sampling frequencies at the start of the
+                            // recording.
+                            if (i > sensorEvents.size/10 && bar.size < 4) bar.add(timestamp)
                             if (prevBar != 0L && timestamp-prevBar > 1000) {
                                 hole += timestamp-prevBar
                             }
                             prevBar = timestamp
                         }
                         2 -> {
-                            if (acc.size < 4) acc.add(timestamp)
+                            if (i > sensorEvents.size/10 && acc.size < 4) acc.add(timestamp)
                             if (prevAcc != 0L && timestamp-prevAcc > 1000) {
                                 hole += timestamp-prevAcc
                             }
