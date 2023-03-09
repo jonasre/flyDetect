@@ -131,7 +131,7 @@ class HomeFragment : Fragment() {
         ) {
             binding.sensorFileLoaded.visibility = View.VISIBLE
             binding.replayProgress.visibility = View.VISIBLE
-            binding.nextAnalysis.visibility = View.GONE
+            binding.nextAnalysis.visibility = View.INVISIBLE
             binding.flightButton.isEnabled = false
         } else {
             binding.sensorFileLoaded.visibility = View.GONE
