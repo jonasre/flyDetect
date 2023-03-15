@@ -10,8 +10,8 @@ import kotlin.math.max
 
 class DecisionComponent(
     private val service: DetectionService,
-    accFrequency: Float,
-    barFrequency: Float,
+    accFrequency: Int,
+    barFrequency: Int,
     landingDetectionMethod: String
 ) {
     private var flying = false
@@ -31,17 +31,15 @@ class DecisionComponent(
         // Set appropriate buffer size. This is to avoid buffer overflow when using a sensor file
         // with a higher sampling rate than what is specified in the settings
         val sensorInjection = service.isUsingSensorInjection
-        val accSize =
-            if (sensorInjection) 100 * SECONDS_OF_ACC else (accFrequency * SECONDS_OF_ACC).toInt()
-        val barSize =
-            if (sensorInjection) 4 * SECONDS_OF_BAR else (barFrequency * SECONDS_OF_BAR).toInt()
+        val accSize = if (sensorInjection) 300 * SECONDS_OF_ACC else (accFrequency * SECONDS_OF_ACC)
+        val barSize = if (sensorInjection) 50 * SECONDS_OF_BAR else (barFrequency * SECONDS_OF_BAR)
         accBuffer = SensorDataRingBuffer(accSize)
         barBuffer = SensorDataRingBuffer(barSize)
 
         pressurePlateauDetectionMethod = when (landingDetectionMethod) {
             "DERIVATIVE" -> ::detectPressurePlateauDerivative
             "MOVING_VAR" -> ::detectPressurePlateauVariance
-            else -> throw java.lang.Exception("Illegal argument for landing detection method")
+            else -> throw IllegalArgumentException("Illegal argument for landing detection method")
         }
 
         computedBarWindow = when (landingDetectionMethod) {
@@ -49,7 +47,7 @@ class DecisionComponent(
                     DERIVATIVE_TIME_STEP*1_000_000L
             "MOVING_VAR" -> DEFAULT_BAR_CHECK_INTERVAL + BAR_MOVING_AVG_WINDOW_SIZE*1_000_000L +
                     BAR_MOVING_VAR_WINDOW_SIZE*1_000_000L
-            else -> throw java.lang.Exception("Illegal argument for landing detection method")
+            else -> throw IllegalArgumentException("Illegal argument for landing detection method")
         }
     }
 
@@ -516,7 +514,10 @@ class DecisionComponent(
         return arrayOf() // for the compiler
     }
 
-    private fun movingVariance(source: Array<Pair<Long, Float>>, ms: Int): Array<Pair<Long, Float>> {
+    private fun movingVariance(
+        source: Array<Pair<Long, Float>>,
+        ms: Int
+    ): Array<Pair<Long, Float>> {
         if (source.isEmpty()) return arrayOf()
         val mv = FloatArray(source.size)
 

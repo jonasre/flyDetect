@@ -64,12 +64,15 @@ class DetectionService : Service() {
 
         val resample = intent.getBooleanExtra("resampleSensorFile", true)
 
-        decisionComponent = DecisionComponent(
-            this,
-            accSamplingFrequency,
-            barSamplingFrequency,
-            landingDetectionMethod
-        )
+        (getSystemService(Context.SENSOR_SERVICE) as SensorManager).let {
+            decisionComponent = DecisionComponent(
+                this,
+                Util.convertHzMicroseconds(it.getDefaultSensor(Sensor.TYPE_ACCELEROMETER).minDelay),
+                Util.convertHzMicroseconds(it.getDefaultSensor(Sensor.TYPE_PRESSURE).minDelay),
+                landingDetectionMethod
+            )
+        }
+
         accListener = AccelerometerListener(decisionComponent)
         barListener = BarometerListener(decisionComponent)
 
