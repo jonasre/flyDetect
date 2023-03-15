@@ -601,7 +601,7 @@ class DecisionComponent(
         private const val GRAVITY_ACC = 9.80665f // m/s^2
 
         // How many seconds of acceleration data should be stored in the buffer
-        private const val SECONDS_OF_ACC = 120
+        private const val SECONDS_OF_ACC = 80
 
         // If the gap between the newest event and the one before it exceeds this value, the buffer
         // before the newest event will be checked to avoid skipping data
@@ -650,7 +650,7 @@ class DecisionComponent(
         /* Pressure related constants */
 
         // How many seconds of pressure data should be stored in the buffer
-        private const val SECONDS_OF_BAR = 480
+        private const val SECONDS_OF_BAR = 190
 
         // If the gap between the newest event and the one before it exceeds this value, the buffer
         // before the newest event will be checked to avoid skipping data
