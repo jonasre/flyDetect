@@ -293,11 +293,12 @@ class DecisionComponent(
 
     /**
      * Looks for a pressure plateau, i.e., where pressure is stable, using moving variance. The
-     * moving variance is calculated from [movingAverage].
+     * moving variance is calculated from [movingAverage]. [startIndex] can be used to skip the
+     * first elements of [movingAverage] when calculating the moving variance and therefore save
+     * some computation, but this argument is optional.
      *
      * @return
-     * The index of the pressure plateau in [movingAverage], if found. Index calculated with
-     * [startIndex].
+     * The index of the pressure plateau in [movingAverage], if found.
      *
      * -2 if pressure might be stable at the end of [movingAverage], but we need more data.
      *
@@ -305,20 +306,25 @@ class DecisionComponent(
      */
     private fun detectPressurePlateauVariance(
         movingAverage: Array<Pair<Long, Float>>,
-        startIndex: Int
+        startIndex: Int = 0
     ): Int {
         val variance = movingVariance(
             movingAverage.copyOfRange(startIndex, movingAverage.size),
             BAR_MOVING_VAR_WINDOW_SIZE
         )
-        val ret = filterThresholdMin(variance, STABLE_PRESSURE_THRESHOLD, STABLE_PRESSURE_MIN_TIME)
-        if (ret >= 0) return ret + startIndex
+        var ret = filterThresholdMin(variance, STABLE_PRESSURE_THRESHOLD, STABLE_PRESSURE_MIN_TIME)
+        if (ret >= 0) {
+            ret = movingAverage.toList().binarySearch { it.first.compareTo(variance[ret].first) }
+            if (ret < 0) throw IllegalStateException("Timestamp in mv not in ma")
+        }
         return ret
     }
 
     /**
      * Looks for a pressure plateau, i.e., where pressure is stable, using derivative. The
-     * derivative is calculated from [movingAverage].
+     * derivative is calculated from [movingAverage]. [startIndex] can be used to skip the
+     * first elements of [movingAverage] when calculating the derivative and therefore save some
+     * computation, but this argument is optional.
      *
      * @return
      * The index of the pressure plateau in [movingAverage], if found. Index calculated with
@@ -328,20 +334,27 @@ class DecisionComponent(
      */
     private fun detectPressurePlateauDerivative(
         movingAverage: Array<Pair<Long, Float>>,
-        startIndex: Int
+        startIndex: Int = 0
     ): Int {
         val derivatives = derivative(movingAverage.copyOfRange(startIndex, movingAverage.size))
         for (i in derivatives.indices) {
-            if (abs(derivatives[i].second) <= STABLE_PRESSURE_DERIVATIVE_THRESHOLD)
-                return i + startIndex
+            if (abs(derivatives[i].second) <= STABLE_PRESSURE_DERIVATIVE_THRESHOLD) {
+                val ret = movingAverage.toList().binarySearch {
+                    it.first.compareTo(derivatives[i].first)
+                }
+                if (ret < 0) throw IllegalStateException("Timestamp in derivatives not in ma")
+                return ret
+            }
         }
         return -1
     }
 
     private fun normalize(ma: Array<Pair<Long, Float>>, mv: Array<Pair<Long, Float>>) {
         // Find acceleration offset
-        val stableIndex = accStableIndex(mv)
+        var stableIndex = accStableIndex(mv)
         if (stableIndex >= 0) {
+            stableIndex = ma.toList().binarySearch { it.first.compareTo(mv[stableIndex].first) }
+            if (stableIndex < 0) throw IllegalStateException("Timestamp in mv not in ma")
             accOffset = GRAVITY_ACC - ma[stableIndex].second
             Log.d(TAG, "accOffset now $accOffset (at ${asSeconds(ma[stableIndex].first)} s)")
         }
@@ -482,15 +495,18 @@ class DecisionComponent(
         return false
     }
 
+    @Suppress("UNCHECKED_CAST")
     private fun movingAverage(source: Array<Pair<Long, Float>>, ms: Int): Array<Pair<Long, Float>> {
         if (source.isEmpty()) return arrayOf()
-        val ma = FloatArray(source.size)
+        val ma: Array<Pair<Long, Float>?> = arrayOfNulls(source.size)
 
         val windowSize: Long = ms*1_000_000L
         var sum = 0f
         var top = 0
         var current = 0f
-        for (i in source.indices) {
+        var i = 0
+        var count = 0
+        while (i < source.size) {
             sum -= current
             current = source[i].second
             val ceil = source[i].first + windowSize
@@ -503,29 +519,38 @@ class DecisionComponent(
             if (top > source.lastIndex ||
                 (source[top].first - ceil)/windowSize.toDouble() > MAX_RELATIVE_MARGIN_CEIL
             ) {
+                if (top < source.lastIndex) {
+                    Log.d(TAG, "[moving avg] Hole in data?")
+                    sum = 0f
+                    current = 0f
+                    i = top
+                    continue
+                }
                 // Return when there isn't enough events to calculate the average.
                 // This is used to avoid noise at the end of the array
-                return Array(i) {
-                    Pair(source[it].first, ma[it])
-                }
+                return ma.copyOfRange(0, count) as Array<Pair<Long, Float>>
+
             }
-            ma[i] = sum / (top - i)
+            ma[count++] = Pair(source[i].first, sum / (top - i))
+            i++
         }
         return arrayOf() // for the compiler
     }
 
+    @Suppress("UNCHECKED_CAST")
     private fun movingVariance(
         source: Array<Pair<Long, Float>>,
         ms: Int
     ): Array<Pair<Long, Float>> {
         if (source.isEmpty()) return arrayOf()
-        val mv = FloatArray(source.size)
-
+        val mv: Array<Pair<Long, Float>?> = arrayOfNulls(source.size)
         val windowSize: Long = ms*1_000_000L
         var sum = 0f
         var top = 0
         var current = 0f
-        for (i in source.indices) {
+        var i = 0
+        var count = 0
+        while (i < source.size) {
             sum -= current
             current = source[i].second
             val ceil = source[i].first + windowSize
@@ -537,11 +562,16 @@ class DecisionComponent(
             }
             if (top > source.lastIndex ||
                 (source[top].first - ceil)/windowSize.toDouble() > MAX_RELATIVE_MARGIN_CEIL) {
+                if (top < source.lastIndex) {
+                    Log.d(TAG, "[moving var] Hole in data?")
+                    sum = 0f
+                    current = 0f
+                    i = top
+                    continue
+                }
                 // Return when there isn't enough events to calculate the average.
                 // This is used to avoid noise at the end of the array
-                return Array(i) {
-                    Pair(source[it].first, mv[it])
-                }
+                return mv.copyOfRange(0, count) as Array<Pair<Long, Float>>
             }
             val mean = sum / (top - i)
             var total = 0f
@@ -549,7 +579,9 @@ class DecisionComponent(
                 val deviation = mean - source[j].second
                 total += deviation * deviation
             }
-            mv[i] = total/(top-i)
+            mv[count] = Pair(source[i].first, total/(top-i))
+            count++
+            i++
         }
         return arrayOf() // for the compiler
     }
