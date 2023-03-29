@@ -19,8 +19,7 @@ class DecisionComponent(
     private var roll: Boolean = false
     private var rollTimestamp: Long = 0L
     private var accOffset = 0f
-    private val accBuffer: SensorDataRingBuffer
-    private val barBuffer: SensorDataRingBuffer
+    private val buffer: SensorDataRingBuffer
     private val pressurePlateauDetectionMethod: (src: Array<Pair<Long, Float>>, index: Int) -> Int
 
     // The computed window size for pressure, compensated with the window size of moving average
@@ -33,8 +32,7 @@ class DecisionComponent(
         val sensorInjection = service.isUsingSensorInjection
         val accSize = if (sensorInjection) 300 * SECONDS_OF_ACC else (accFrequency * SECONDS_OF_ACC)
         val barSize = if (sensorInjection) 50 * SECONDS_OF_BAR else (barFrequency * SECONDS_OF_BAR)
-        accBuffer = SensorDataRingBuffer(accSize)
-        barBuffer = SensorDataRingBuffer(barSize)
+        buffer = SensorDataRingBuffer(max(accSize, barSize))
 
         pressurePlateauDetectionMethod = when (landingDetectionMethod) {
             "DERIVATIVE" -> ::detectPressurePlateauDerivative
@@ -84,7 +82,7 @@ class DecisionComponent(
 
     // Adds an acceleration sample to its buffer
     fun addAccSample(event: Pair<Long, Float>) {
-        accBuffer.latestEntry()?.let {
+        buffer.latestEntry()?.let {
             // If the time difference between the newest event and the one before it is greater
             // than ACC_MAX_DELAY, check the buffer before adding the new event
             if (event.first - it.first > ACC_MAX_DELAY) {
@@ -93,7 +91,7 @@ class DecisionComponent(
                 checkAcc()
             }
         }
-        accBuffer.insert(event) // Insert the new event
+        buffer.insert(event) // Insert the new event
         if (event.first >= nextAccCheckTime) {
             // Check the buffer if scheduled check time is reached
             checkAcc()
@@ -102,7 +100,7 @@ class DecisionComponent(
 
     // Adds a pressure sample to its buffer
     fun addBarSample(event: Pair<Long, Float>) {
-        barBuffer.latestEntry()?.let {
+        buffer.latestEntry()?.let {
             // If the time difference between the newest event and the one before it is greater
             // than BAR_MAX_DELAY, check the buffer before adding the new event
             if (event.first - it.first > BAR_MAX_DELAY) {
@@ -111,7 +109,7 @@ class DecisionComponent(
                 checkBar()
             }
         }
-        barBuffer.insert(event) // Insert the new event
+        buffer.insert(event) // Insert the new event
         if (event.first >= nextBarCheckTime) {
             // Check the buffer if scheduled check time is reached
             checkBar()
@@ -138,15 +136,16 @@ class DecisionComponent(
         val forced = t1 < 0
         service.notifyFlightStatusChange(flying, forced)
 
+        // Clear the buffer (avoid mixing acceleration and pressure)
+        buffer.clear()
+
         // Register/unregister listeners accordingly
         if (flying) {
             service.registerSensorListener(Sensor.TYPE_PRESSURE)
             service.unregisterSensorListener(Sensor.TYPE_ACCELEROMETER)
-            accBuffer.clear()
         } else {
             service.registerSensorListener(Sensor.TYPE_ACCELEROMETER)
             service.unregisterSensorListener(Sensor.TYPE_PRESSURE)
-            barBuffer.clear()
             lastPressurePlateau = Pair(0, 0f) // reset
         }
 
@@ -164,7 +163,7 @@ class DecisionComponent(
 
     private fun checkAcc() {
         if (flying) throw IllegalStateException("checkAcc called when flying")
-        val window = accBuffer.getLatest(nextCheckWindowAcc)
+        val window = buffer.getLatest(nextCheckWindowAcc)
         val ma = movingAverage(window, ACC_MOVING_AVG_WINDOW_SIZE)
         val mv = movingVariance(window, ACC_MOVING_VAR_WINDOW_SIZE)
 
@@ -240,7 +239,7 @@ class DecisionComponent(
     }
 
     private fun checkBar() {
-        val window = barBuffer.getLatest(nextCheckWindowBar)
+        val window = buffer.getLatest(nextCheckWindowBar)
         val average = movingAverage(window, BAR_MOVING_AVG_WINDOW_SIZE)
         var timeUntilNextCheck = DEFAULT_BAR_CHECK_INTERVAL
 
