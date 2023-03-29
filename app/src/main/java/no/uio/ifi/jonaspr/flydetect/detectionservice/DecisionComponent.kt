@@ -624,7 +624,7 @@ class DecisionComponent(
     companion object {
         private const val TAG = "DC"
         private const val DEFAULT_ACC_CHECK_INTERVAL = 60_000_000_000 //nanoseconds (ns)
-        private const val DEFAULT_BAR_CHECK_INTERVAL = 120_000_000_000 //nanoseconds (ns)
+        private const val DEFAULT_BAR_CHECK_INTERVAL = 60_000_000_000 //nanoseconds (ns)
         private const val MAX_RELATIVE_MARGIN_CEIL = 0.1f
 
         /* Acceleration related constants */
@@ -682,7 +682,7 @@ class DecisionComponent(
         /* Pressure related constants */
 
         // How many seconds of pressure data should be stored in the buffer
-        private const val SECONDS_OF_BAR = 190
+        private const val SECONDS_OF_BAR = 110
 
         // If the gap between the newest event and the one before it exceeds this value, the buffer
         // before the newest event will be checked to avoid skipping data
