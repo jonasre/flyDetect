@@ -16,6 +16,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import no.uio.ifi.jonaspr.flydetect.*
+import no.uio.ifi.jonaspr.flydetect.flightdata.Flight
+import no.uio.ifi.jonaspr.flydetect.flightdata.Storage
+import no.uio.ifi.jonaspr.flydetect.detectionservice.sensor.*
 
 class DetectionService : Service() {
     private val binder = DetectionServiceBinder(this)
@@ -86,14 +89,14 @@ class DetectionService : Service() {
                     inputStream.close()
                     decisionComponent.setStartTime(l[1].toLong()*1_000_000) // index 1 is timestamp
                     return@withContext CustomSensorManager(
-                        getSystemService(Context.SENSOR_SERVICE) as SensorManager,
+                        getSystemService(SENSOR_SERVICE) as SensorManager,
                         l,
                         resample
                     )
                 }
             } else {
                 decisionComponent.setStartTime(SystemClock.elapsedRealtimeNanos())
-                SensorManagerWrapper(getSystemService(Context.SENSOR_SERVICE) as SensorManager)
+                SensorManagerWrapper(getSystemService(SENSOR_SERVICE) as SensorManager)
             }
             registerSensorListener(Sensor.TYPE_ACCELEROMETER)
         }

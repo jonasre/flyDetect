@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import no.uio.ifi.jonaspr.flydetect.detectionservice.sensor.SensorDataRingBuffer
 import kotlin.math.abs
 import kotlin.math.max
 

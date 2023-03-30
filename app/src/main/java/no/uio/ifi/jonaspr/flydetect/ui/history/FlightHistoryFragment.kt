@@ -6,7 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.DividerItemDecoration
-import no.uio.ifi.jonaspr.flydetect.Storage
+import no.uio.ifi.jonaspr.flydetect.flightdata.Storage
 import no.uio.ifi.jonaspr.flydetect.databinding.FragmentFlightHistoryBinding
 
 class FlightHistoryFragment : Fragment() {

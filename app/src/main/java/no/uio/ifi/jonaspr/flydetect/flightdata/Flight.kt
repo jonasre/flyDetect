@@ -1,4 +1,4 @@
-package no.uio.ifi.jonaspr.flydetect.detectionservice
+package no.uio.ifi.jonaspr.flydetect.flightdata
 
 data class Flight(val start: Long) {
     var forcedStart: Boolean = false

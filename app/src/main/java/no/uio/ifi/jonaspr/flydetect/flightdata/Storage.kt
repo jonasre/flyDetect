@@ -1,9 +1,8 @@
-package no.uio.ifi.jonaspr.flydetect
+package no.uio.ifi.jonaspr.flydetect.flightdata
 
 import android.content.Context
 import android.content.SharedPreferences
 import com.google.gson.Gson
-import no.uio.ifi.jonaspr.flydetect.detectionservice.Flight
 
 object Storage {
     private const val NAME = "my_flights"

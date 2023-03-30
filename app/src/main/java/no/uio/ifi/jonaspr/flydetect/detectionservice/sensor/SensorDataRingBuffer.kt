@@ -1,4 +1,4 @@
-package no.uio.ifi.jonaspr.flydetect.detectionservice
+package no.uio.ifi.jonaspr.flydetect.detectionservice.sensor
 
 internal class SensorDataRingBuffer(size: Int) {
     private val array: Array<Pair<Long, Float>?>

@@ -1,4 +1,4 @@
-package no.uio.ifi.jonaspr.flydetect.detectionservice
+package no.uio.ifi.jonaspr.flydetect.detectionservice.sensor
 
 import android.hardware.Sensor
 import android.hardware.SensorEventListener

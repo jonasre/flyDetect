@@ -1,8 +1,9 @@
-package no.uio.ifi.jonaspr.flydetect.detectionservice
+package no.uio.ifi.jonaspr.flydetect.detectionservice.sensor
 
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
+import no.uio.ifi.jonaspr.flydetect.detectionservice.DecisionComponent
 import kotlin.math.sqrt
 
 class AccelerometerListener(

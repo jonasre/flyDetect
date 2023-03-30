@@ -7,10 +7,10 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.recyclerview.widget.RecyclerView
 import no.uio.ifi.jonaspr.flydetect.R
-import no.uio.ifi.jonaspr.flydetect.Storage
+import no.uio.ifi.jonaspr.flydetect.flightdata.Storage
 import no.uio.ifi.jonaspr.flydetect.Util
 import no.uio.ifi.jonaspr.flydetect.databinding.FlightHistoryItemBinding
-import no.uio.ifi.jonaspr.flydetect.detectionservice.Flight
+import no.uio.ifi.jonaspr.flydetect.flightdata.Flight
 import java.text.SimpleDateFormat
 import java.util.*
 

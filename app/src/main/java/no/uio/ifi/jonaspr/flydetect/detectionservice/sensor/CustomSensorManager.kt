@@ -1,4 +1,4 @@
-package no.uio.ifi.jonaspr.flydetect.detectionservice
+package no.uio.ifi.jonaspr.flydetect.detectionservice.sensor
 
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -114,7 +114,8 @@ class CustomSensorManager(
 
         if (currentIndex == lines.size) Log.i(TAG, "Replay complete")
         else Log.i(TAG, "Replay stopped prematurely")
-        Log.d(TAG, "Forwarded ${eventCount[Sensor.TYPE_ACCELEROMETER]} accelerometer and " +
+        Log.d(
+            TAG, "Forwarded ${eventCount[Sensor.TYPE_ACCELEROMETER]} accelerometer and " +
                 "${eventCount[Sensor.TYPE_PRESSURE]} barometer samples")
         running = false
         stop = false
