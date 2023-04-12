@@ -59,13 +59,22 @@ class DecisionComponent(
     // Pair of <timestamp, pressure> where pressure is stable.
     private var lastPressurePlateau: Pair<Long, Float> = Pair(0, 0f)
 
+    // These timestamps represent the starting time when a value was above/below a threshold
+    // (filterThreshold) or within a range (filterRange) but returned -2 (see the relevant
+    // functions)
+    private var filterThresholdStartTime: Long = -1L
+    private var filterRangeStartTime: Long = -1L
+
+    // This variable holds the timestamp of the latest used sample. As the length of the data is
+    // truncated by sliding window algorithms, the timestamp saved is the one that belongs to the
+    // last sample in the shortest data array (for pressure, this is either the moving variance or
+    // derivative depending on the chosen landing detection method.
+    private var lastSampleTimestamp: Long = -1L
+
     private var nextAccCheckTime: Long = 0
     private var nextBarCheckTime: Long = 0
 
     private var startTime = 0L
-
-    private var nextCheckWindowAcc: Int = (COMPUTED_ACC_WINDOW/1_000_000_000).toInt()
-    private var nextCheckWindowBar: Int = (computedBarWindow/1_000_000_000).toInt()
 
     fun currentlyFlying() = flyingLive.value!!
     fun flyingLiveData(): LiveData<Boolean> = flyingLive
@@ -92,6 +101,7 @@ class DecisionComponent(
                 checkAcc()
             }
         }
+        if (flying) return
         buffer.insert(event) // Insert the new event
         if (event.first >= nextAccCheckTime) {
             // Check the buffer if scheduled check time is reached
@@ -110,6 +120,7 @@ class DecisionComponent(
                 checkBar()
             }
         }
+        if (!flying) return
         buffer.insert(event) // Insert the new event
         if (event.first >= nextBarCheckTime) {
             // Check the buffer if scheduled check time is reached
@@ -131,6 +142,7 @@ class DecisionComponent(
 
     private fun setFlyingStatus(x: Boolean, t1: Long, t2: Long) {
         if (x == flying) return // Do nothing if status is not changed
+        lastSampleTimestamp = -1L
         flying = x
         flyingLive.postValue(x)
 
@@ -163,10 +175,11 @@ class DecisionComponent(
     }
 
     private fun checkAcc() {
-        if (flying) throw IllegalStateException("checkAcc called when flying")
-        val window = buffer.getLatest(nextCheckWindowAcc)
+        if (flying) throw IllegalStateException("checkAcc called in 'flying' state")
+        val window = buffer.getLatestUntil(lastSampleTimestamp)
         val ma = movingAverage(window, ACC_MOVING_AVG_WINDOW_SIZE)
         val mv = movingVariance(window, ACC_MOVING_VAR_WINDOW_SIZE)
+        lastSampleTimestamp = if (mv.isNotEmpty()) mv[mv.lastIndex].first else window[0].first
 
         nextAccCheckTime = window[window.lastIndex].first
         var timeUntilNextCheck = DEFAULT_ACC_CHECK_INTERVAL
@@ -180,6 +193,7 @@ class DecisionComponent(
         // the user is not in an aircraft)
         val skip = noiseFilter(mv)
         if (skip) {
+            filterRangeStartTime = -1L
             nextAccCheckTime += timeUntilNextCheck
             Log.v(TAG, "Stopping acc check early because data is too noisy to indicate " +
                     "flying (approximate time: ${asSeconds(window[0].first)} s)")
@@ -240,11 +254,14 @@ class DecisionComponent(
     }
 
     private fun checkBar() {
-        val window = buffer.getLatest(nextCheckWindowBar)
+        if (!flying) throw IllegalStateException("checkBar called in 'not flying' state")
+        val window = buffer.getLatestUntil(lastSampleTimestamp)
         val average = movingAverage(window, BAR_MOVING_AVG_WINDOW_SIZE)
         var timeUntilNextCheck = DEFAULT_BAR_CHECK_INTERVAL
 
         nextBarCheckTime = window[window.lastIndex].first
+        lastSampleTimestamp = if (average.isNotEmpty())
+            average[average.lastIndex].first else window[0].first
 
         var i = 0
         while (i < average.size && flying) {
@@ -312,9 +329,11 @@ class DecisionComponent(
             movingAverage.copyOfRange(startIndex, movingAverage.size),
             BAR_MOVING_VAR_WINDOW_SIZE
         )
+        lastSampleTimestamp = if (variance.isNotEmpty())
+            variance[variance.lastIndex].first else movingAverage[0].first
         var ret = filterThresholdMin(variance, STABLE_PRESSURE_THRESHOLD, STABLE_PRESSURE_MIN_TIME)
         if (ret >= 0) {
-            ret = movingAverage.toList().binarySearch { it.first.compareTo(variance[ret].first) }
+            ret = movingAverage.asList().binarySearch { it.first.compareTo(variance[ret].first) }
             if (ret < 0) throw IllegalStateException("Timestamp in mv not in ma")
         }
         return ret
@@ -337,9 +356,12 @@ class DecisionComponent(
         startIndex: Int = 0
     ): Int {
         val derivatives = derivative(movingAverage.copyOfRange(startIndex, movingAverage.size))
+        // Update lastSampleTimestamp
+        lastSampleTimestamp = if (derivatives.isNotEmpty())
+            derivatives[derivatives.lastIndex].first else movingAverage[0].first
         for (i in derivatives.indices) {
             if (abs(derivatives[i].second) <= STABLE_PRESSURE_DERIVATIVE_THRESHOLD) {
-                val ret = movingAverage.toList().binarySearch {
+                val ret = movingAverage.asList().binarySearch {
                     it.first.compareTo(derivatives[i].first)
                 }
                 if (ret < 0) throw IllegalStateException("Timestamp in derivatives not in ma")
@@ -353,7 +375,7 @@ class DecisionComponent(
         // Find acceleration offset
         var stableIndex = accStableIndex(mv)
         if (stableIndex >= 0) {
-            stableIndex = ma.toList().binarySearch { it.first.compareTo(mv[stableIndex].first) }
+            stableIndex = ma.asList().binarySearch { it.first.compareTo(mv[stableIndex].first) }
             if (stableIndex < 0) throw IllegalStateException("Timestamp in mv not in ma")
             accOffset = GRAVITY_ACC - ma[stableIndex].second
             Log.d(TAG, "accOffset now $accOffset (at ${asSeconds(ma[stableIndex].first)} s)")
@@ -367,7 +389,12 @@ class DecisionComponent(
      * if no such index is found
      */
     private fun accStableIndex(mv: Array<Pair<Long, Float>>): Int {
-        return filterThresholdMin(mv, STABLE_ACC_VARIANCE_THRESHOLD, STABLE_ACC_MIN_TIME)
+        return filterThresholdMin(
+            mv,
+            STABLE_ACC_VARIANCE_THRESHOLD,
+            STABLE_ACC_MIN_TIME,
+            resetStartTime = true
+        )
     }
 
     // Returns true/false if the provided moving variance is too high to indicate flying or not
@@ -376,7 +403,8 @@ class DecisionComponent(
             mv,
             ACC_WALK_FILTER_THRESHOLD,
             ACC_WALK_MIN_TIME,
-            false
+            successIfBelowThreshold = false,
+            resetStartTime = true
         ) >= 0
     }
 
@@ -402,7 +430,10 @@ class DecisionComponent(
         // -1 if liftoff was detected but after the deadline
         if (ret >= 0 && source[ret + startIndex].first > deadline) return -1
         // -1 if acceleration was within the range at the end of the data, but deadline was exceeded
-        if (ret == -2 && source[source.lastIndex].first > deadline) return -1
+        if (ret == -2 && source[source.lastIndex].first > deadline) {
+            filterRangeStartTime = -1L // manual reset
+            return -1
+        }
         // -2 if acceleration was not within the range but the deadline has not been reached
         if (ret == -1 && source[source.lastIndex].first < deadline) return -2
         return if (ret < 0) ret else ret + startIndex
@@ -424,27 +455,35 @@ class DecisionComponent(
         source: Array<Pair<Long, Float>>,
         threshold: Float,
         minTime: Long,
-        successIfBelowThreshold: Boolean = true
+        successIfBelowThreshold: Boolean = true,
+        resetStartTime: Boolean = false
     ): Int {
+        if (source.isNotEmpty() && filterThresholdStartTime > source[0].first)
+            throw IllegalStateException("Source array not correctly trimmed")
         var i = 0
-        var startTime = -1L
+        var detected = false
         val m = if (successIfBelowThreshold) 1 else -1
         val th = threshold*m
-        while (i < source.size) {
-            val (timestamp, value) = source[i++]
-            if (value*m > th) {
-                startTime = -1L
-            } else if (startTime < 0) {
-                startTime = timestamp
-            } else if (timestamp - startTime >= minTime) {
-                return i - 1
+        try {
+            while (i < source.size) {
+                val (timestamp, value) = source[i++]
+                if (value*m > th) {
+                    filterThresholdStartTime = -1L
+                } else if (filterThresholdStartTime < 0) {
+                    filterThresholdStartTime = timestamp
+                } else if (timestamp - filterThresholdStartTime >= minTime) {
+                    detected = true
+                    return i - 1
+                }
             }
+            // The data was on the correct side of the threshold when we ran out of data
+            if (filterThresholdStartTime >= 0) return -2
+            // The data was not on the correct side of the threshold long enough, neither was it on
+            // the correct side when we ran out of data
+            return -1
+        } finally {
+            if (detected || resetStartTime) filterThresholdStartTime = -1L
         }
-        // The data was on the correct side of the threshold when we ran out of data
-        if (startTime >= 0) return -2
-        // The data was not on the correct side of the threshold long enough, neither was it on the
-        // correct side when we ran out of data
-        return -1
     }
 
     /**
@@ -461,25 +500,33 @@ class DecisionComponent(
     private fun filterRangeMin(
         source: Array<Pair<Long, Float>>,
         range: ClosedFloatingPointRange<Float>,
-        minTime: Long
+        minTime: Long,
+        resetStartTime: Boolean = false
     ): Int {
+        if (source.isNotEmpty() && filterRangeStartTime > source[0].first)
+            throw IllegalStateException("Source array not correctly trimmed")
+        var detected = false
         var i = 0
-        var startTime = -1L
-        while (i < source.size) {
-            val (timestamp, value) = source[i++]
-            if (value !in range) {
-                startTime = -1L
-            } else if (startTime < 0) {
-                startTime = timestamp
-            } else if (timestamp - startTime >= minTime) {
-                return i - 1
+        try {
+            while (i < source.size) {
+                val (timestamp, value) = source[i++]
+                if (value !in range) {
+                    filterRangeStartTime = -1L
+                } else if (filterRangeStartTime < 0) {
+                    filterRangeStartTime = timestamp
+                } else if (timestamp - filterRangeStartTime >= minTime) {
+                    detected = true
+                    return i - 1
+                }
             }
+            // The data was within the range when we ran out of data
+            if (filterRangeStartTime >= 0) return -2
+            // The data was not within the range long enough, neither was it on the within the range
+            // when we ran out of data
+            return -1
+        } finally {
+            if (detected || resetStartTime) filterRangeStartTime = -1L
         }
-        // The data was within the range when we ran out of data
-        if (startTime >= 0) return -2
-        // The data was not within the range long enough, neither was it on the within the range
-        // when we ran out of data
-        return -1
     }
 
     private fun newPressurePlateau(t: Long, v: Float): Boolean {

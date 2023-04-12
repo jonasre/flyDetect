@@ -36,12 +36,39 @@ internal class SensorDataRingBuffer(size: Int) {
         val latestTimestamp = array[topIndex]!!.first
         val timestampCutoff = latestTimestamp - (seconds * TIMESTAMP_MULTIPLIER)
         val cutoffIndex = binarySearch(timestampCutoff)
-        return if (cutoffIndex > topIndex) {
+        return getRange(cutoffIndex, topIndex)
+        /*return if (cutoffIndex > topIndex) {
             val a = array.copyOfRange(cutoffIndex, array.size) as Array<Pair<Long, Float>>
             val b = array.copyOfRange(0, topIndex + 1) as Array<Pair<Long, Float>>
             concatArrays(a, b)
         } else {
             array.copyOfRange(cutoffIndex, topIndex + 1) as Array<Pair<Long, Float>>
+        }*/
+    }
+
+    fun getLatestUntil(timestamp: Long): Array<Pair<Long, Float>> {
+        val cutoffIndex = binarySearch(timestamp)
+        array[cutoffIndex]?.let {
+            if (it.first != timestamp && timestamp != -1L)
+                throw IllegalStateException("There might have been loss of data")
+        }
+        return getRange(cutoffIndex, topIndex)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun getRange(a: Int, b: Int): Array<Pair<Long, Float>> {
+        if (a !in 0..array.size || b !in 0..array.size)
+            throw IndexOutOfBoundsException(
+                "Argument(s) (a = $a, b = $b) outside allowed range (0..${array.size})"
+            )
+
+        return if (a > b) {
+            concatArrays(
+                array.copyOfRange(a, array.size) as Array<Pair<Long, Float>>,
+                array.copyOfRange(0, b + 1) as Array<Pair<Long, Float>>
+            )
+        } else {
+            array.copyOfRange(a, b + 1) as Array<Pair<Long, Float>>
         }
     }
 
