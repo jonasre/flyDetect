@@ -59,12 +59,6 @@ class DecisionComponent(
     // Pair of <timestamp, pressure> where pressure is stable.
     private var lastPressurePlateau: Pair<Long, Float> = Pair(0, 0f)
 
-    // These timestamps represent the starting time when a value was above/below a threshold
-    // (filterThreshold) or within a range (filterRange) but returned -2 (see the relevant
-    // functions)
-    private var filterThresholdStartTime: Long = -1L
-    private var filterRangeStartTime: Long = -1L
-
     // This variable holds the timestamp of the latest used sample. As the length of the data is
     // truncated by sliding window algorithms, the timestamp saved is the one that belongs to the
     // last sample in the shortest data array (for pressure, this is either the moving variance or
@@ -177,6 +171,10 @@ class DecisionComponent(
     private fun checkAcc() {
         if (flying) throw IllegalStateException("checkAcc called in 'flying' state")
         val window = buffer.getLatestUntil(lastSampleTimestamp)
+        if (window.isEmpty()) {
+            nextAccCheckTime += DEFAULT_ACC_CHECK_INTERVAL
+            return
+        }
         val ma = movingAverage(window, ACC_MOVING_AVG_WINDOW_SIZE)
         val mv = movingVariance(window, ACC_MOVING_VAR_WINDOW_SIZE)
         lastSampleTimestamp = if (mv.isNotEmpty()) mv[mv.lastIndex].first else window[0].first
@@ -191,10 +189,13 @@ class DecisionComponent(
 
         // Skip the rest of the check if the data is noisy (could be walking/running, and therefore
         // the user is not in an aircraft)
-        val skip = noiseFilter(mv)
-        if (skip) {
-            filterRangeStartTime = -1L
-            nextAccCheckTime += timeUntilNextCheck
+        val noiseFilterRet = noiseFilter(mv)
+        if (noiseFilterRet >= 0) {
+            // Manually reset progress for takeoff detection
+            TIMESTAMP_MAP[TYPE_TAKEOFF_ROLL] = -1L
+            TIMESTAMP_MAP[TYPE_LIFTOFF] = -1L
+            lastSampleTimestamp = window[noiseFilterRet].first + DEFAULT_ACC_CHECK_INTERVAL
+            nextAccCheckTime = lastSampleTimestamp + DEFAULT_ACC_CHECK_INTERVAL
             Log.v(TAG, "Stopping acc check early because data is too noisy to indicate " +
                     "flying (approximate time: ${asSeconds(window[0].first)} s)")
             return
@@ -331,7 +332,11 @@ class DecisionComponent(
         )
         lastSampleTimestamp = if (variance.isNotEmpty())
             variance[variance.lastIndex].first else movingAverage[0].first
-        var ret = filterThresholdMin(variance, STABLE_PRESSURE_THRESHOLD, STABLE_PRESSURE_MIN_TIME)
+        var ret = filterThresholdMin(variance,
+            STABLE_PRESSURE_THRESHOLD,
+            STABLE_PRESSURE_MIN_TIME,
+            TYPE_VARIANCE_PRESSURE_PLATEAU
+        )
         if (ret >= 0) {
             ret = movingAverage.asList().binarySearch { it.first.compareTo(variance[ret].first) }
             if (ret < 0) throw IllegalStateException("Timestamp in mv not in ma")
@@ -393,26 +398,29 @@ class DecisionComponent(
             mv,
             STABLE_ACC_VARIANCE_THRESHOLD,
             STABLE_ACC_MIN_TIME,
-            resetStartTime = true
+            TYPE_NORMALIZE,
+            resetStartTime = false
         )
     }
 
     // Returns true/false if the provided moving variance is too high to indicate flying or not
-    private fun noiseFilter(mv: Array<Pair<Long, Float>>): Boolean {
+    private fun noiseFilter(mv: Array<Pair<Long, Float>>): Int {
         return filterThresholdMin(
             mv,
             ACC_WALK_FILTER_THRESHOLD,
             ACC_WALK_MIN_TIME,
+            TYPE_NOISE_FILTER,
             successIfBelowThreshold = false,
-            resetStartTime = true
-        ) >= 0
+            resetStartTime = false
+        )
     }
 
     private fun takeoffRollDetection(source: Array<Pair<Long, Float>>, startIndex: Int): Int {
         val ret = filterRangeMin(
             source.copyOfRange(startIndex, source.size),
             TAKEOFF_ROLL_ACC_RANGE,
-            TAKEOFF_ROLL_TIME_MIN
+            TAKEOFF_ROLL_TIME_MIN,
+            TYPE_TAKEOFF_ROLL
         )
         return if (ret < 0) ret else ret + startIndex
     }
@@ -425,13 +433,14 @@ class DecisionComponent(
         val ret = filterRangeMin(
             source.copyOfRange(startIndex, source.size),
             LIFTOFF_ACC_RANGE,
-            LIFTOFF_TIME_MIN
+            LIFTOFF_TIME_MIN,
+            TYPE_LIFTOFF
         )
         // -1 if liftoff was detected but after the deadline
         if (ret >= 0 && source[ret + startIndex].first > deadline) return -1
         // -1 if acceleration was within the range at the end of the data, but deadline was exceeded
         if (ret == -2 && source[source.lastIndex].first > deadline) {
-            filterRangeStartTime = -1L // manual reset
+            TIMESTAMP_MAP[TYPE_LIFTOFF] = -1L // manual reset
             return -1
         }
         // -2 if acceleration was not within the range but the deadline has not been reached
@@ -455,10 +464,11 @@ class DecisionComponent(
         source: Array<Pair<Long, Float>>,
         threshold: Float,
         minTime: Long,
+        id: Int,
         successIfBelowThreshold: Boolean = true,
         resetStartTime: Boolean = false
     ): Int {
-        if (source.isNotEmpty() && filterThresholdStartTime > source[0].first)
+        if (source.isNotEmpty() && TIMESTAMP_MAP[id]!! > source[0].first)
             throw IllegalStateException("Source array not correctly trimmed")
         var i = 0
         var detected = false
@@ -468,21 +478,21 @@ class DecisionComponent(
             while (i < source.size) {
                 val (timestamp, value) = source[i++]
                 if (value*m > th) {
-                    filterThresholdStartTime = -1L
-                } else if (filterThresholdStartTime < 0) {
-                    filterThresholdStartTime = timestamp
-                } else if (timestamp - filterThresholdStartTime >= minTime) {
+                    TIMESTAMP_MAP[id] = -1L
+                } else if (TIMESTAMP_MAP[id]!! < 0) {
+                    TIMESTAMP_MAP[id] = timestamp
+                } else if (timestamp - TIMESTAMP_MAP[id]!! >= minTime) {
                     detected = true
                     return i - 1
                 }
             }
             // The data was on the correct side of the threshold when we ran out of data
-            if (filterThresholdStartTime >= 0) return -2
+            if (TIMESTAMP_MAP[id]!! >= 0) return -2
             // The data was not on the correct side of the threshold long enough, neither was it on
             // the correct side when we ran out of data
             return -1
         } finally {
-            if (detected || resetStartTime) filterThresholdStartTime = -1L
+            if (detected || resetStartTime) TIMESTAMP_MAP[id] = -1L
         }
     }
 
@@ -501,9 +511,10 @@ class DecisionComponent(
         source: Array<Pair<Long, Float>>,
         range: ClosedFloatingPointRange<Float>,
         minTime: Long,
+        id: Int,
         resetStartTime: Boolean = false
     ): Int {
-        if (source.isNotEmpty() && filterRangeStartTime > source[0].first)
+        if (source.isNotEmpty() && TIMESTAMP_MAP[id]!! > source[0].first)
             throw IllegalStateException("Source array not correctly trimmed")
         var detected = false
         var i = 0
@@ -511,21 +522,21 @@ class DecisionComponent(
             while (i < source.size) {
                 val (timestamp, value) = source[i++]
                 if (value !in range) {
-                    filterRangeStartTime = -1L
-                } else if (filterRangeStartTime < 0) {
-                    filterRangeStartTime = timestamp
-                } else if (timestamp - filterRangeStartTime >= minTime) {
+                    TIMESTAMP_MAP[id] = -1L
+                } else if (TIMESTAMP_MAP[id]!! < 0) {
+                    TIMESTAMP_MAP[id] = timestamp
+                } else if (timestamp - TIMESTAMP_MAP[id]!! >= minTime) {
                     detected = true
                     return i - 1
                 }
             }
             // The data was within the range when we ran out of data
-            if (filterRangeStartTime >= 0) return -2
+            if (TIMESTAMP_MAP[id]!! >= 0) return -2
             // The data was not within the range long enough, neither was it on the within the range
             // when we ran out of data
             return -1
         } finally {
-            if (detected || resetStartTime) filterRangeStartTime = -1L
+            if (detected || resetStartTime) TIMESTAMP_MAP[id] = -1L
         }
     }
 
@@ -762,5 +773,24 @@ class DecisionComponent(
         // Stable pressure before landing can't last longer than this to qualify as pre-landing
         // pressure
         private const val LANDING_PRESSURE_MAX_TIME = 620_000_000_000 //nanoseconds (ns)
+
+
+        /* Other constants */
+
+        // Identifiers for different methods
+        private const val TYPE_TAKEOFF_ROLL = 1
+        private const val TYPE_LIFTOFF = 2
+        private const val TYPE_NORMALIZE = 3
+        private const val TYPE_NOISE_FILTER = 4
+        private const val TYPE_VARIANCE_PRESSURE_PLATEAU = 5
+
+        // Timestamp map
+        private val TIMESTAMP_MAP = mutableMapOf(
+            TYPE_TAKEOFF_ROLL to -1L,
+            TYPE_LIFTOFF to -1L,
+            TYPE_NORMALIZE to -1L,
+            TYPE_NOISE_FILTER to -1L,
+            TYPE_VARIANCE_PRESSURE_PLATEAU to -1L
+        )
     }
 }
