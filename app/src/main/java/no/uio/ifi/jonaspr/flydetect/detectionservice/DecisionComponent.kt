@@ -56,6 +56,15 @@ class DecisionComponent(
     private var flightEndDetect = -1
     private var flightCount = 0
 
+    // Timestamp map
+    private val timestampMap = mutableMapOf(
+        TYPE_TAKEOFF_ROLL to -1L,
+        TYPE_LIFTOFF to -1L,
+        TYPE_NORMALIZE to -1L,
+        TYPE_NOISE_FILTER to -1L,
+        TYPE_VARIANCE_PRESSURE_PLATEAU to -1L
+    )
+
     // Pair of <timestamp, pressure> where pressure is stable.
     private var lastPressurePlateau: Pair<Long, Float> = Pair(0, 0f)
 
@@ -192,8 +201,8 @@ class DecisionComponent(
         val noiseFilterRet = noiseFilter(mv)
         if (noiseFilterRet >= 0) {
             // Manually reset progress for takeoff detection
-            TIMESTAMP_MAP[TYPE_TAKEOFF_ROLL] = -1L
-            TIMESTAMP_MAP[TYPE_LIFTOFF] = -1L
+            timestampMap[TYPE_TAKEOFF_ROLL] = -1L
+            timestampMap[TYPE_LIFTOFF] = -1L
             lastSampleTimestamp = window[noiseFilterRet].first + DEFAULT_ACC_CHECK_INTERVAL
             nextAccCheckTime = lastSampleTimestamp + DEFAULT_ACC_CHECK_INTERVAL
             Log.v(TAG, "Stopping acc check early because data is too noisy to indicate " +
@@ -440,7 +449,7 @@ class DecisionComponent(
         if (ret >= 0 && source[ret + startIndex].first > deadline) return -1
         // -1 if acceleration was within the range at the end of the data, but deadline was exceeded
         if (ret == -2 && source[source.lastIndex].first > deadline) {
-            TIMESTAMP_MAP[TYPE_LIFTOFF] = -1L // manual reset
+            timestampMap[TYPE_LIFTOFF] = -1L // manual reset
             return -1
         }
         // -2 if acceleration was not within the range but the deadline has not been reached
@@ -468,7 +477,7 @@ class DecisionComponent(
         successIfBelowThreshold: Boolean = true,
         resetStartTime: Boolean = false
     ): Int {
-        if (source.isNotEmpty() && TIMESTAMP_MAP[id]!! > source[0].first)
+        if (source.isNotEmpty() && timestampMap[id]!! > source[0].first)
             throw IllegalStateException("Source array not correctly trimmed")
         var i = 0
         var detected = false
@@ -478,21 +487,21 @@ class DecisionComponent(
             while (i < source.size) {
                 val (timestamp, value) = source[i++]
                 if (value*m > th) {
-                    TIMESTAMP_MAP[id] = -1L
-                } else if (TIMESTAMP_MAP[id]!! < 0) {
-                    TIMESTAMP_MAP[id] = timestamp
-                } else if (timestamp - TIMESTAMP_MAP[id]!! >= minTime) {
+                    timestampMap[id] = -1L
+                } else if (timestampMap[id]!! < 0) {
+                    timestampMap[id] = timestamp
+                } else if (timestamp - timestampMap[id]!! >= minTime) {
                     detected = true
                     return i - 1
                 }
             }
             // The data was on the correct side of the threshold when we ran out of data
-            if (TIMESTAMP_MAP[id]!! >= 0) return -2
+            if (timestampMap[id]!! >= 0) return -2
             // The data was not on the correct side of the threshold long enough, neither was it on
             // the correct side when we ran out of data
             return -1
         } finally {
-            if (detected || resetStartTime) TIMESTAMP_MAP[id] = -1L
+            if (detected || resetStartTime) timestampMap[id] = -1L
         }
     }
 
@@ -514,7 +523,7 @@ class DecisionComponent(
         id: Int,
         resetStartTime: Boolean = false
     ): Int {
-        if (source.isNotEmpty() && TIMESTAMP_MAP[id]!! > source[0].first)
+        if (source.isNotEmpty() && timestampMap[id]!! > source[0].first)
             throw IllegalStateException("Source array not correctly trimmed")
         var detected = false
         var i = 0
@@ -522,21 +531,21 @@ class DecisionComponent(
             while (i < source.size) {
                 val (timestamp, value) = source[i++]
                 if (value !in range) {
-                    TIMESTAMP_MAP[id] = -1L
-                } else if (TIMESTAMP_MAP[id]!! < 0) {
-                    TIMESTAMP_MAP[id] = timestamp
-                } else if (timestamp - TIMESTAMP_MAP[id]!! >= minTime) {
+                    timestampMap[id] = -1L
+                } else if (timestampMap[id]!! < 0) {
+                    timestampMap[id] = timestamp
+                } else if (timestamp - timestampMap[id]!! >= minTime) {
                     detected = true
                     return i - 1
                 }
             }
             // The data was within the range when we ran out of data
-            if (TIMESTAMP_MAP[id]!! >= 0) return -2
+            if (timestampMap[id]!! >= 0) return -2
             // The data was not within the range long enough, neither was it on the within the range
             // when we ran out of data
             return -1
         } finally {
-            if (detected || resetStartTime) TIMESTAMP_MAP[id] = -1L
+            if (detected || resetStartTime) timestampMap[id] = -1L
         }
     }
 
@@ -783,14 +792,5 @@ class DecisionComponent(
         private const val TYPE_NORMALIZE = 3
         private const val TYPE_NOISE_FILTER = 4
         private const val TYPE_VARIANCE_PRESSURE_PLATEAU = 5
-
-        // Timestamp map
-        private val TIMESTAMP_MAP = mutableMapOf(
-            TYPE_TAKEOFF_ROLL to -1L,
-            TYPE_LIFTOFF to -1L,
-            TYPE_NORMALIZE to -1L,
-            TYPE_NOISE_FILTER to -1L,
-            TYPE_VARIANCE_PRESSURE_PLATEAU to -1L
-        )
     }
 }
