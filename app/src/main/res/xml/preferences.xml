@@ -31,5 +31,10 @@
             android:key="landing_detection_method"
             android:title="Landing detection method"
             app:useSimpleSummaryProvider="true"/>
+        <SwitchPreference
+            android:defaultValue="true"
+            android:key="normalize"
+            android:title="Normalize acceleration data"
+            android:summary="Attempts to compensate for wrongly calibrated accelerometers"/>
     </PreferenceCategory>
 </PreferenceScreen>

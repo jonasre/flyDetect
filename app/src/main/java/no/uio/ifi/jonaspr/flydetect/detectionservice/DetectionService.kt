@@ -48,6 +48,7 @@ class DetectionService : Service() {
         barSamplingFrequency = intent.getFloatExtra("barSamplingFrequency", -1f)
 
         val landingDetectionMethod = intent.getStringExtra("landingDetectionMethod")!!
+        val normalize = intent.getBooleanExtra("normalize", true)
 
         // Get sensorFile for sensor injection (optional)
         // intent.getParcelableExtra(key) is deprecated since API level 33
@@ -72,7 +73,8 @@ class DetectionService : Service() {
                 this,
                 Util.convertHzMicroseconds(it.getDefaultSensor(Sensor.TYPE_ACCELEROMETER).minDelay),
                 Util.convertHzMicroseconds(it.getDefaultSensor(Sensor.TYPE_PRESSURE).minDelay),
-                landingDetectionMethod
+                landingDetectionMethod,
+                normalize
             )
         }
 

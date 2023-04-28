@@ -164,6 +164,7 @@ class MainActivity : AppCompatActivity() {
                     "landingDetectionMethod",
                     it.getString("landing_detection_method", "")
                 )
+                putExtra("normalize", it.getBoolean("normalize", true))
             }
         }
     }

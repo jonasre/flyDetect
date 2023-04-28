@@ -13,7 +13,8 @@ class DecisionComponent(
     private val service: DetectionService,
     accFrequency: Int,
     barFrequency: Int,
-    landingDetectionMethod: String
+    landingDetectionMethod: String,
+    private val normalizeEnabled: Boolean
 ) {
     private var flying = false
     private val flyingLive = MutableLiveData(false)
@@ -210,8 +211,8 @@ class DecisionComponent(
             return
         }
 
-        // Normalize data
-        normalize(ma, mv)
+        // Normalize data if enabled in settings
+        if (normalizeEnabled) normalize(ma, mv)
 
         var i = 0
         while (i < ma.size) {
