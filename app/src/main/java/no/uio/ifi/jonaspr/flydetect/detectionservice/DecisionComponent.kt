@@ -202,6 +202,7 @@ class DecisionComponent(
         val noiseFilterRet = noiseFilter(mv)
         if (noiseFilterRet >= 0) {
             // Manually reset progress for takeoff detection
+            roll = false
             timestampMap[TYPE_TAKEOFF_ROLL] = -1L
             timestampMap[TYPE_LIFTOFF] = -1L
             lastSampleTimestamp = window[noiseFilterRet].first + DEFAULT_ACC_CHECK_INTERVAL
@@ -252,8 +253,16 @@ class DecisionComponent(
                         timeUntilNextCheck /= 2
                     }
                     else -> {
-                        setFlyingStatus(true, ma[i].first, window[window.lastIndex].first)
                         roll = false
+                        val variance = mv[
+                                mv.asList().binarySearch { it.first.compareTo(ma[i].first) }
+                        ].second
+                        if (variance > LIFTOFF_MAX_VARIANCE) {
+                            Log.i(TAG, "Liftoff was detected, but rejected " +
+                                    "because of high variance")
+                            break
+                        }
+                        setFlyingStatus(true, ma[i].first, window[window.lastIndex].first)
                         Log.i(TAG, "Flight detected at ${ma[i].first} (aka " +
                                 "${asSeconds(ma[i].first)} s)")
                     }
@@ -719,9 +728,12 @@ class DecisionComponent(
         private const val STABLE_ACC_MIN_TIME = 10_000_000_000 //nanoseconds (ns)
 
         // If variance is above this value then the acceleration can not be considered for takeoff
-        private const val ACC_WALK_FILTER_THRESHOLD = 4f
+        private const val ACC_WALK_FILTER_THRESHOLD = 3.5f
 
         private const val ACC_WALK_MIN_TIME = 12_000_000_000 //nanoseconds (ns)
+
+        // If variance is above this value when liftoff is detected, the liftoff is rejected
+        private const val LIFTOFF_MAX_VARIANCE = 6.5f
 
         // Acceleration must be within this range to qualify as takeoff roll
         private val TAKEOFF_ROLL_ACC_RANGE = 9.95f..10.42f // m/s^2

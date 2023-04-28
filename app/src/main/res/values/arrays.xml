@@ -5,6 +5,7 @@
         <item>2 Hz</item>
         <item>5 Hz</item>
         <item>10 Hz</item>
+        <item>15 Hz</item>
         <item>20 Hz</item>
         <item>30 Hz</item>
         <item>60 Hz</item>
@@ -15,6 +16,7 @@
         <item>2.0</item>
         <item>5.0</item>
         <item>10.0</item>
+        <item>15.0</item>
         <item>20.0</item>
         <item>30.0</item>
         <item>60.0</item>
