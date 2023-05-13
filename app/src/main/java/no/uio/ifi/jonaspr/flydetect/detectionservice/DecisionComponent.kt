@@ -725,11 +725,15 @@ class DecisionComponent(
         // Variance must be below this value to consider acceleration stable
         private const val STABLE_ACC_VARIANCE_THRESHOLD = 0.005f
 
+        // Variance must be below STABLE_ACC_VARIANCE_THRESHOLD for this amount of time to be
+        // considered stable
         private const val STABLE_ACC_MIN_TIME = 10_000_000_000 //nanoseconds (ns)
 
         // If variance is above this value then the acceleration can not be considered for takeoff
         private const val ACC_WALK_FILTER_THRESHOLD = 3.5f
 
+        // If variance is below ACC_WALK_FILTER_THRESHOLD for this amount of time then the
+        // acceleration can not be considered for takeoff
         private const val ACC_WALK_MIN_TIME = 12_000_000_000 //nanoseconds (ns)
 
         // If variance is above this value when liftoff is detected, the liftoff is rejected
@@ -792,8 +796,7 @@ class DecisionComponent(
         // Change in pressure must be within this range to qualify as landing
         private val LANDING_PRESSURE_DIFF_RANGE = -23f..-2f //hPa
 
-        // Stable pressure before landing can't last longer than this to qualify as pre-landing
-        // pressure
+        // Stable pressure before landing can't last longer than this to qualify as landing pressure
         private const val LANDING_PRESSURE_MAX_TIME = 620_000_000_000 //nanoseconds (ns)
 
 
